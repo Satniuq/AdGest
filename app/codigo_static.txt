@@ -1,0 +1,167 @@
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\static\css\style.css --
+/* Global */
+body {
+  background-color: #f8f9fa;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* Navbar */
+.navbar-brand {
+  font-weight: bold;
+}
+
+.navbar-nav .nav-link {
+  margin-right: 10px;
+}
+
+/* Containers */
+.container, .container-fluid {
+  margin-top: 20px;
+}
+
+/* Cards (para os assuntos) */
+.card {
+  margin-bottom: 20px;
+}python
+
+.card-header {
+  background-color: #e9ecef;
+  font-weight: bold;
+  padding: 10px 15px;
+}
+
+/* List groups */
+.list-group-item {
+  font-size: 0.9rem;
+}
+
+/* Dropdown menus */
+.dropdown-menu {
+  min-width: 8rem;
+}
+
+/* Grid / Layout de duas colunas */
+.row {
+  margin-top: 20px;
+}
+
+.col-md-3, .col-md-9 {
+  padding: 15px;
+}
+
+/* Tabelas */
+table {
+  margin-top: 20px;
+}
+
+/* Botões */
+.btn-light {
+  border: 1px solid #ccc;
+}
+
+/* Separadores e bordas */
+.border-end {
+  border-right: 1px solid #dee2e6;
+}
+
+/* Estilo para os dropdowns de ação (botões sanduíche) */
+.dropdown-toggle::after {
+  display: none; /* Se quiser remover o caret padrão */
+}
+
+/* Espaçamentos adicionais */
+.mt-2 {
+  margin-top: 0.5rem !important;
+}
+
+.mb-2 {
+  margin-bottom: 0.5rem !important;
+}
+
+/* Ajuste de alertas */
+.alert {
+  margin-top: 10px;
+}
+
+/* Personalização extra para layout de index */
+
+/* Para a coluna de prazos (esquerda) */
+.col-md-3 .list-group-item {
+  padding: 10px;
+}
+
+/* Para a tabela interna de tarefas, reduz um pouco o padding */
+.table-sm th, .table-sm td {
+  padding: 0.3rem 0.5rem;
+}
+
+/* Exemplo de estilização para botões de ação em dropdowns */
+.dropdown-menu .dropdown-item {
+  font-size: 0.9rem;
+}
+
+
+/* Ajuste nos botões de ação dos cards */
+.card-header .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.text-ellipsis-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3; /* Trunca em 3 linhas */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+/* Indicador visual para itens compartilhados */
+.shared-item {
+  border-left: 4px solid #FFA500; /* Cor laranja para destacar */
+  padding-left: 4px;
+}
+
+/* Destacar linhas de documentos atrasados */
+.table-danger td {
+  background-color: #ffe5e5;
+}
+
+/* Estilo dos cards de indicadores */
+.card h3 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+/* Estilo para o modal de detalhes */
+.modal-body pre {
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 5px;
+}
+
+
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\static\icons\icon-192x192.png --
+
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\static\js\customs.js --
+document.addEventListener('DOMContentLoaded', function() {
+  const carouselElement = document.getElementById('billingCarousel');
+  if(carouselElement) {
+      // Se necessário, inicialize manualmente o carousel ou configure comportamentos adicionais.
+      new bootstrap.Carousel(carouselElement, {
+          interval: 5000,
+          wrap: true
+      });
+  }
+});
+
+  
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\static\js\script.js --
+
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\static\js\sortable.min.js --
+
+--------------------------------------------------------------------------------

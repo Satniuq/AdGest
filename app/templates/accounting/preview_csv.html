@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualização CSV{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Pré-visualização dos Registros Importados</h2>
+  {% if registros %}
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          {% for col in registros[0].keys() %}
+            <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in registros %}
+          <tr>
+            {% for col in row.keys() %}
+              <td>{{ row[col] }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="POST" action="{{ url_for('accounting.confirm_csv_import') }}">
+      <button type="submit" class="btn btn-success">Confirmar Importação</button>
+    </form>
+  {% else %}
+    <p>Nenhum registro para exibir.</p>
+  {% endif %}
+</div>
+{% endblock %}

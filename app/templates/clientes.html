@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="mb-4 text-center">Lista de Clientes</h2>
+  
+  <!-- Botão Criar Cliente e CSV -->
+  <div class="text-end mb-3">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-outline-primary">Importar Clientes CSV</a>
+    <a href="{{ url_for('main.create_client') }}" class="btn btn-success">+ Criar Cliente</a>
+  </div>
+  
+  <!-- Caixa de pesquisa -->
+  <form method="GET" action="{{ url_for('main.clientes') }}" class="mb-3">
+    <input type="text" name="q" id="clientSearch" class="form-control" placeholder="Pesquisar cliente (nome ou número interno)..." value="{{ search }}">
+  </form>
+
+  <!-- Exibição dos clientes em cards -->
+  <div class="row" id="clientList">
+    {% for client in clients %}
+      <div class="col-md-4 mb-3 client-card">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">{{ client.name }}</h5>
+            {% if client.number_interno %}
+              <h6 class="card-subtitle mb-2 text-muted">{{ client.number_interno }}</h6>
+            {% endif %}
+            <p class="card-text">
+              {% if client.email %}Email: {{ client.email }}<br>{% endif %}
+              {% if client.telephone %}Tel: {{ client.telephone }}{% endif %}
+            </p>
+          </div>
+          <div class="card-footer d-flex justify-content-between align-items-center">
+            <div>
+              <a href="{{ url_for('main.client_info', client_id=client.id) }}" class="btn btn-primary btn-sm">Info</a>
+              <a href="{{ url_for('main.historico_cliente', client_id=client.id) }}" class="btn btn-info btn-sm">Histórico</a>
+              {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('main.billing_cliente', client_id=client.id) }}" class="btn btn-success btn-sm">Billing</a>
+                <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+              {% elif current_user.role == 'advogado' %}
+                <a href="{{ url_for('main.billing_cliente', client_id=client.id) }}" class="btn btn-success btn-sm">Billing</a>
+              {% else %}
+                <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+              {% endif %}
+            </div>
+          </div>                                                 
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  
+  <!-- Controles de paginação -->
+  {% if pagination.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+      <ul class="pagination justify-content-center">
+        {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.clientes', page=pagination.prev_num, q=search) }}">Anterior</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        {% for page in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+          {% if page %}
+            {% if page == pagination.page %}
+              <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+            {% else %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('main.clientes', page=page, q=search) }}">{{ page }}</a></li>
+            {% endif %}
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.clientes', page=pagination.next_num, q=search) }}">Próximo</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Próximo</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% endif %}
+</div>
+{% endblock %}

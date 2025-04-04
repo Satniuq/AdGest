@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Notas de Honorários{% endblock %}
+{% block content %}
+<div class="text-center mb-4">
+  <h2>Notas de Honorários</h2>
+</div>
+<div class="row">
+  <!-- Coluna dos Itens a Processar -->
+  <div class="col-md-6">
+    <h3>Por Processar</h3>
+    <form method="POST" id="billingForm">
+      {% for client_id, group in grouped_data.items() %}
+        <div class="mb-3">
+          <h4>Cliente: {{ group.client.name }}</h4>
+          {# Exibe os assuntos e suas tarefas #}
+          {% for assunto_id, a_data in group.assuntos.items() %}
+            <div class="ms-3 mb-2">
+              <label class="{% if a_data.assunto.shared_with.count() > 0 %}shared-item{% endif %}">
+                <input type="checkbox" name="items" value="assunto-{{ a_data.assunto.id }}" class="subject-checkbox">
+                <strong>Assunto:</strong> {{ a_data.assunto.nome_assunto }} - Total Horas (tarefas): {{ a_data.assunto.tarefas|map(attribute='horas')|sum }}h
+              </label>
+              <!-- Link para reverter faturamento do assunto -->
+              <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('assunto', {{ a_data.assunto.id }}); return false;">Reverter</a>
+              {% if a_data.tarefas %}
+                <ul>
+                  {% for tarefa in a_data.tarefas %}
+                    <li>
+                      <label class="{% if tarefa.shared_with.count() > 0 %}shared-item{% endif %}">
+                        <input type="checkbox" name="items" value="tarefa-{{ tarefa.id }}" data-subject-id="{{ a_data.assunto.id }}">
+                        <strong>Tarefa:</strong> {{ tarefa.nome_tarefa }},
+                        Horas: {{ tarefa.horas }}h,
+                        Concluída em: {% if tarefa.data_conclusao %}{{ tarefa.data_conclusao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %}
+                      </label>
+                      <!-- Link para reverter faturamento da tarefa -->
+                      <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('tarefa', {{ tarefa.id }}); return false;">Reverter</a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {# Exibe os prazos do cliente #}
+          {% if group.prazos %}
+            <div class="ms-3 mb-2">
+              <strong>Prazos:</strong>
+              <ul>
+                {% for prazo in group.prazos %}
+                  <li>
+                    <label class="{% if prazo.shared_with.count() > 0 %}shared-item{% endif %}">
+                      <input type="checkbox" name="items" value="prazo-{{ prazo.id }}">
+                      <strong>{{ prazo.assunto }}</strong> – Processo: {{ prazo.processo }}, Horas: {{ prazo.horas }}h,
+                      Data: {% if prazo.prazo %}{{ prazo.prazo.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %}
+                    </label>
+                    <!-- Link para reverter faturamento do prazo -->
+                    <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('prazo', {{ prazo.id }}); return false;">Reverter</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">Gerar Nota de Honorários</button>
+    </form>
+  </div>
+  
+  <!-- Coluna do Histórico de Notas -->
+  <div class="col-md-6">
+    <h3>Notas Emitidas</h3>
+    {% if nota_honorarios and nota_honorarios|length > 0 %}
+      <div id="billingCarousel" class="carousel slide" data-bs-interval="false">
+        <div class="carousel-inner">
+          {% for nota in nota_honorarios %}
+            <div class="carousel-item {% if loop.first %}active{% endif %}">
+              <div class="card">
+                <div class="card-header">
+                  Nota #{{ nota.id }} – {{ nota.client.name }}
+                </div>
+                <div class="card-body">
+                  <p><strong>Data:</strong> {{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                  <p><strong>Total de Horas:</strong> {{ nota.total_hours }}h</p>
+                  <pre style="white-space: pre-wrap;">{{ nota.details }}</pre>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#billingCarousel" data-bs-slide="prev">
+          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Anterior</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#billingCarousel" data-bs-slide="next">
+          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Próximo</span>
+        </button>
+      </div>
+    {% else %}
+      <p>Nenhuma nota emitida ainda.</p>
+    {% endif %}
+    <div class="mt-3">
+      <a href="{{ url_for('main.billing_historico') }}" class="btn btn-secondary">Ver Histórico de Notas</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Gera a URL de base para reverter, usando um valor dummy para item_id e um placeholder para item_type
+  var revertBillingUrlTemplate = "{{ url_for('main.revert_billing', item_type='__ITEM_TYPE__', item_id=9999999) }}";
+  // Gera a URL para o billing, para redirecionamento após a operação
+  var billingUrl = "{{ url_for('main.billing') }}";
+  
+  // Script de seleção automática de tarefas relacionadas ao marcar um assunto
+  document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.subject-checkbox').forEach(function(subjectCheckbox) {
+          subjectCheckbox.addEventListener('change', function() {
+              var subjectId = this.value.split('-')[1];
+              document.querySelectorAll('input[type="checkbox"][name="items"][data-subject-id="' + subjectId + '"]').forEach(function(taskCheckbox) {
+                  taskCheckbox.checked = subjectCheckbox.checked;
+              });
+          });
+      });
+  });
+  
+  // Função para reverter um item via fetch (sem CSRF header)
+  function revertItem(itemType, itemId) {
+      // Substitui os placeholders na URL com os valores reais
+      var url = revertBillingUrlTemplate.replace("__ITEM_TYPE__", itemType).replace("9999999", itemId);
+      fetch(url, { method: "POST" })
+          .then(function(response) {
+              if(response.ok) {
+                  window.location.href = billingUrl;
+              } else {
+                  alert("Erro ao reverter o faturamento.");
+              }
+          })
+          .catch(function(error) {
+              alert("Erro ao reverter o faturamento.");
+          });
+  }
+  </script>
+  
+{% endblock %}
+
+  

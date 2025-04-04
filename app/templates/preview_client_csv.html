@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualização Clientes CSV{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Pré-visualização dos Clientes Importados</h2>
+  
+  {% if errors %}
+    <div class="alert alert-danger">
+      <h4>Erros encontrados:</h4>
+      <ul>
+        {% for error in errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        {% for col in registros[0].keys() %}
+          <th>{{ col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+        <tr>
+          {% for col in row.keys() %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <form method="POST" action="{{ url_for('main.preview_client_csv') }}">
+    <button type="submit" class="btn btn-success" {% if errors %}disabled{% endif %}>Confirmar Importação</button>
+    {% if errors %}
+      <p class="text-danger mt-2">Por favor, corrija os erros no arquivo CSV e refaça a importação.</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

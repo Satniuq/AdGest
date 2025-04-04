@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Editar Documento #{{ doc.numero or doc.id }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="card">
+    <!-- Cabeçalho do Card -->
+    <div class="card-header bg-primary text-white">
+      <h5 class="card-title mb-0">Editar Documento #{{ doc.numero or doc.id }}</h5>
+    </div>
+    <!-- Corpo do Card com o Formulário -->
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('accounting.edit_documento', doc_id=doc.id) }}">
+        {{ form.hidden_tag() }}
+        <!-- Linha 1: Número e Tipo -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="{{ form.numero.id }}" class="form-label">Número</label>
+            {{ form.numero(class="form-control") }}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ form.tipo.id }}" class="form-label">Tipo</label>
+            {{ form.tipo(class="form-select") }}
+          </div>
+        </div>
+        <!-- Linha 2: Datas (Data de Emissão e Data de Vencimento) -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="{{ form.data_emissao.id }}" class="form-label">Data de Emissão</label>
+            {{ form.data_emissao(class="form-control", type="date") }}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ form.data_vencimento.id }}" class="form-label">Data de Vencimento</label>
+            {{ form.data_vencimento(class="form-control", type="date") }}
+          </div>
+        </div>
+        <!-- Linha 3: Valor e Advogado -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label for="{{ form.valor.id }}" class="form-label">Valor</label>
+            {{ form.valor(class="form-control") }}
+          </div>
+          <div class="col-md-6">
+            <label for="{{ form.advogado.id }}" class="form-label">Advogado</label>
+            {{ form.advogado(class="form-control") }}
+          </div>
+        </div>
+        <!-- Linha 4: Status -->
+        <div class="mb-3">
+          <label for="{{ form.status.id }}" class="form-label">Status</label>
+          {{ form.status(class="form-select") }}
+        </div>
+        <!-- Linha 5: Descrição -->
+        <div class="mb-3">
+          <label for="{{ form.historico.id }}" class="form-label">Descrição</label>
+          {{ form.historico(class="form-control", rows="2") }}
+        </div>
+        <!-- Botões do Rodapé -->
+        <div class="d-flex justify-content-end">
+          <!-- Botão Voltar: redireciona para a página de detalhes, reabrindo o modal -->
+          <a href="{{ url_for('accounting.contabilidade_cliente', client_id=doc.client_id, modal=doc.id) }}" class="btn btn-secondary me-2">Voltar</a>
+          <!-- Botão Salvar: envia o formulário -->
+          <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

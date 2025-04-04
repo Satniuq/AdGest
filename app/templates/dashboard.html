@@ -1,0 +1,532 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="container my-4">
+  <!-- Linha superior: 3 janelinhas colapsáveis + botões à direita -->
+  <div class="row align-items-start mb-3">
+    <!-- JANELINHA HOJE -->
+    <div class="col-md-2">
+      <div class="card">
+        <!-- Cabeçalho colapsável -->
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseHoje"
+                  aria-expanded="false"
+                  aria-controls="collapseHoje">
+            Hoje <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>        
+        <!-- Corpo colapsado -->
+        <div id="collapseHoje" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas de HOJE -->
+            {% for assunto in assuntos %}
+              {% set tarefas_hoje = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.due_date and tarefa.due_date <= current_date %}
+                  {% set _ = tarefas_hoje.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_hoje = (assunto.due_date and assunto.due_date <= current_date) %}
+              {% if assunto_e_hoje or tarefas_hoje|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_hoje %}
+                    {% if tarefas_hoje %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_hoje %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa de hoje</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_hoje %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos de HOJE -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if prazo.prazo and prazo.prazo <= current_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JANELINHA AMANHÃ -->
+    <div class="col-md-2">
+      <div class="card">
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseAmanha"
+                  aria-expanded="false"
+                  aria-controls="collapseAmanha">
+            Amanhã <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>
+        <div id="collapseAmanha" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas de AMANHÃ -->
+            {% for assunto in assuntos %}
+              {% set tarefas_amanha = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.due_date and tarefa.due_date == tomorrow_date %}
+                  {% set _ = tarefas_amanha.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_amanha = (assunto.due_date and assunto.due_date == tomorrow_date) %}
+              {% if assunto_e_amanha or tarefas_amanha|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_amanha %}
+                    {% if tarefas_amanha %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_amanha %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa para amanhã</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_amanha %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos de AMANHÃ -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if prazo.prazo and prazo.prazo == tomorrow_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JANELINHA DEPOIS -->
+    <div class="col-md-2">
+      <div class="card">
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseDepois"
+                  aria-expanded="false"
+                  aria-controls="collapseDepois">
+            Depois <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>
+        <div id="collapseDepois" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas DEPOIS -->
+            {% for assunto in assuntos %}
+              {% set tarefas_depois = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if not tarefa.due_date or tarefa.due_date > tomorrow_date %}
+                  {% set _ = tarefas_depois.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_depois = (not assunto.due_date or assunto.due_date > tomorrow_date) %}
+              {% if assunto_e_depois or tarefas_depois|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_depois %}
+                    {% if tarefas_depois %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_depois %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa para depois</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_depois %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos DEPOIS -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if not prazo.prazo or prazo.prazo > tomorrow_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coluna Botões à Direita -->
+    <div class="col d-flex justify-content-end">
+      <a href="{{ url_for('main.create_assunto') }}" class="btn btn-primary me-2">
+        <i class="fa-solid fa-plus"></i> Criar Assunto
+      </a>
+      <a href="{{ url_for('main.create_prazo') }}" class="btn btn-secondary">
+        <i class="fa-solid fa-plus"></i> Criar Prazo
+      </a>
+    </div>
+  </div>
+
+  <!-- Linha inferior: Assuntos e Prazos lado a lado -->
+  <div class="row">
+    <!-- Coluna Assuntos -->
+    <div class="col-lg-8">
+      <h4 class="mb-3">Assuntos</h4>
+      <div id="assuntos-container" class="row row-cols-1 row-cols-lg-2 g-3">
+        {% for assunto in assuntos %}
+        <div class="col" data-id="{{ assunto.id }}">
+          <div class="card h-100">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <h5 class="mb-0 flex-grow-1" style="white-space: normal;">
+                  {{ assunto.nome_assunto }}
+                </h5>
+              </div>
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    {{ assunto.user.nickname }}{% for usuario in assunto.shared_with %} / {{ usuario.nickname }}{% endfor %}
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('main.share_assunto', assunto_id=assunto.id) }}">
+                        <i class="fa-solid fa-share-nodes"></i> Compartilhar
+                      </a>
+                    </li>
+                  </ul>
+                </div>                                             
+                <div class="d-flex align-items-center gap-2">
+                  <form action="{{ url_for('main.toggle_status_assunto', assunto_id=assunto.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                      <i class="fa-solid fa-check"></i>
+                    </button>
+                  </form>
+                  <a href="{{ url_for('main.edit_assunto', assunto_id=assunto.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </a>
+                  <form action="{{ url_for('main.delete_assunto', assunto_id=assunto.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              {% set total_horas = 0 %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.horas %}
+                  {% set total_horas = total_horas + tarefa.horas %}
+                {% endif %}
+              {% endfor %}
+              <p class="mb-2" style="white-space: normal;">
+                <strong>Cliente:</strong> {{ assunto.client.name }} |
+                <strong>Data:</strong>
+                {% if assunto.due_date %}
+                  {{ assunto.due_date.strftime('%d/%m/%Y') }}
+                {% else %}
+                  Sem data
+                {% endif %}
+                | <i class="fa-solid fa-clock"></i> {{ total_horas|default(0) }}h
+              </p>
+              <!-- Botão para mostrar Tarefas -->
+              <button class="btn btn-primary mb-2" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#tarefas-{{ assunto.id }}" aria-expanded="false" aria-controls="tarefas-{{ assunto.id }}">
+                <i class="fa-solid fa-eye"></i> Tarefas
+              </button>
+              <div class="collapse" id="tarefas-{{ assunto.id }}">
+                <ul class="list-group mb-3">
+                  {% for tarefa in assuntos_tarefas_visiveis[assunto.id] if not tarefa.is_completed %}
+                    <li class="list-group-item">
+                      <!-- Primeira linha: Botões principais -->
+                      <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="flex-grow-1">
+                          <strong>{{ tarefa.nome_tarefa }}</strong>
+                          {% if tarefa.descricao %}
+                            <em>({{ tarefa.descricao }})</em>
+                          {% endif %}
+                        </div>
+                        <div class="d-flex gap-1">
+                          <!-- Botão Concluir -->
+                          <form action="{{ url_for('main.toggle_status_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                              <i class="fa-solid fa-check"></i>
+                            </button>
+                          </form>
+                          <!-- Botão Editar -->
+                          <a href="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                          </a>
+                          <!-- Botão Excluir -->
+                          <form action="{{ url_for('main.delete_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                              <i class="fa-solid fa-trash"></i>
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                      <!-- Segunda linha: Botão Compartilhar (dropdown) + Botão Adicionar Horas, alinhados à direita -->
+                      <div class="d-flex justify-content-end align-items-center gap-2 mt-2">
+                        <!-- Dropdown estilo "Assunto" para Tarefa -->
+                        <div class="dropdown">
+                          <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fa-solid fa-share-nodes"></i>
+                            {{ tarefa.user.nickname }}{% for usuario in tarefa.shared_with %} / {{ usuario.nickname }}{% endfor %}
+                          </button>
+                          <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                              <a class="dropdown-item" href="{{ url_for('main.share_tarefa', tarefa_id=tarefa.id) }}">
+                                <i class="fa-solid fa-share-nodes"></i> Compartilhar
+                              </a>
+                            </li>
+                          </ul>
+                        </div>
+                        <!-- Botão Adicionar Horas -->
+                        <button class="btn btn-sm btn-outline-secondary add-hours-tarefa"
+                                data-tarefa-id="{{ tarefa.id }}" title="Adicionar Horas">
+                          <i class="fa-solid fa-clock"></i> {{ tarefa.horas|default(0) }}h
+                        </button>
+                      </div>
+                    </li>
+                  {% else %}
+                    <li class="list-group-item text-muted">Nenhuma tarefa pendente.</li>
+                  {% endfor %}
+                </ul>                
+                <!-- Botão Criar Tarefa -->
+                <a href="{{ url_for('main.create_tarefa', assunto_id=assunto.id) }}" class="btn btn-primary">
+                  <i class="fa-solid fa-plus"></i> Criar Tarefa
+                </a>
+              </div>              
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted">Nenhum assunto cadastrado.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Coluna Prazos -->
+    <div class="col-lg-4">
+      <h4 class="mb-3">Prazos</h4>
+      <div class="row row-cols-1 g-3">
+        {% for prazo in prazos %}
+        <div class="col">
+          <div class="card h-100">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <h5 class="mb-0 flex-grow-1" style="white-space: normal;">
+                  {{ prazo.assunto }}
+                </h5>
+              </div>
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    {{ prazo.user.nickname }}
+                    {% for usuario in prazo.shared_with %}
+                      / {{ usuario.nickname }}
+                    {% endfor %}
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('main.share_prazo', prazo_id=prazo.id) }}">
+                        <i class="fa-solid fa-share-nodes"></i> Compartilhar
+                      </a>
+                    </li>
+                  </ul>
+                </div>                
+                <div class="d-flex align-items-center gap-2">
+                  <form action="{{ url_for('main.toggle_status_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                      <i class="fa-solid fa-check"></i>
+                    </button>
+                  </form>
+                  <a href="{{ url_for('main.edit_prazo', prazo_id=prazo.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </a>
+                  <form action="{{ url_for('main.delete_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="card-text mb-2" style="white-space: normal;">
+                <strong>Processo:</strong> {{ prazo.processo }} |
+                <strong>Cliente:</strong> {{ prazo.client.name }} |
+                <strong>Data:</strong>
+                {% if prazo.prazo %}
+                  {{ prazo.prazo.strftime('%d/%m/%Y') }}
+                {% else %}
+                  Sem data
+                {% endif %}
+              </p>
+              <!-- Botão de Horas (Prazo) -->
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-sm btn-outline-secondary add-hours-prazo"
+                        data-prazo-id="{{ prazo.id }}" title="Adicionar Horas">
+                  <i class="fa-solid fa-clock"></i> {{ prazo.horas|default(0) }}h
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted">Nenhum prazo cadastrado.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modais e Scripts de Adicionar Horas -->
+<div class="modal fade" id="modalHorasPrazo" tabindex="-1" aria-labelledby="modalHorasPrazoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formHorasPrazo" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalHorasPrazoLabel">Adicionar Horas ao Prazo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inputHorasPrazo" class="form-label">Horas</label>
+            <input type="number" step="0.1" class="form-control" id="inputHorasPrazo" name="horas" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalHorasTarefa" tabindex="-1" aria-labelledby="modalHorasTarefaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formHorasTarefa" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalHorasTarefaLabel">Adicionar Horas à Tarefa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inputHorasTarefa" class="form-label">Horas</label>
+            <input type="number" step="0.1" class="form-control" id="inputHorasTarefa" name="horas" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Sortable.js e Scripts "Adicionar Horas" -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var containerAssuntos = document.getElementById('assuntos-container');
+    if (containerAssuntos) {
+      new Sortable(containerAssuntos, {
+        animation: 150,
+        onEnd: function (evt) {
+          // Cria um array com a nova ordem de cada card
+          var ordem = [];
+          var cards = containerAssuntos.querySelectorAll('[data-id]');
+          cards.forEach(function(card, index) {
+            var assuntoId = card.getAttribute('data-id');
+            ordem.push({ id: assuntoId, sort_order: index });
+          });
+          console.log("Nova ordem enviada:", ordem);
+          
+          // Envia a nova ordem para o servidor via fetch
+          fetch('{{ url_for("main.update_assuntos_order") }}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ordem: ordem })
+          })
+          .then(response => response.json())
+          .then(data => {
+            console.log("Resposta do servidor:", data);
+            if (data.status !== 'ok') {
+              console.error('Erro ao atualizar ordem:', data.message);
+            }
+          })
+          .catch(error => console.error('Erro na requisição:', error));
+        }
+      });
+    }
+    
+    // Scripts para os modais "adicionar horas"
+    const btnsHorasPrazo = document.querySelectorAll('.add-hours-prazo');
+    btnsHorasPrazo.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const prazoId = this.getAttribute('data-prazo-id');
+        const form = document.getElementById('formHorasPrazo');
+        form.action = '/prazo/add_hours/' + prazoId;
+        document.getElementById('inputHorasPrazo').value = '';
+        const modalHorasPrazo = new bootstrap.Modal(document.getElementById('modalHorasPrazo'));
+        modalHorasPrazo.show();
+      });
+    });
+
+    const btnsHorasTarefa = document.querySelectorAll('.add-hours-tarefa');
+    btnsHorasTarefa.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const tarefaId = this.getAttribute('data-tarefa-id');
+        const form = document.getElementById('formHorasTarefa');
+        form.action = '/tarefa/add_hours/' + tarefaId;
+        document.getElementById('inputHorasTarefa').value = '';
+        const modalHorasTarefa = new bootstrap.Modal(document.getElementById('modalHorasTarefa'));
+        modalHorasTarefa.show();
+      });
+    });
+  });
+</script>
+
+{% endblock %}

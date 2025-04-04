@@ -1,0 +1,14 @@
+{% for notif in notifications %}
+  <div class="notification-item">
+    <p>{{ notif.message }}</p>
+    {% if notif.type == 'share_invite' %}
+      <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='accept') }}" class="btn btn-sm btn-success">Aceitar</a>
+      <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='decline') }}" class="btn btn-sm btn-danger">Recusar</a>
+    {% else %}
+      <a href="{{ notif.link if notif.link else '#' }}" class="btn btn-sm btn-primary">Ver</a>
+    {% endif %}
+    <small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+  </div>
+{% else %}
+  <p>Nenhuma notificação.</p>
+{% endfor %}

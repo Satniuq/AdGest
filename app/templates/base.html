@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}AdGest{% endblock %}</title>
+
+    <!-- FontAwesome (ou outra biblioteca de ícones) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+    <!-- Seu CSS customizado (opcional) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">AdGest</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fa-solid fa-bell"></i>
+                {% if unread_count > 0 %}
+                  <span class="badge bg-danger">{{ unread_count }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotifications">
+                {% for notif in notifications %}
+                  <li class="dropdown-item d-flex justify-content-between align-items-start">
+                    <div>
+                      {{ notif.message }}  
+                      <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </div>
+                    <!-- Botão para marcar como lida via AJAX ou form -->
+                    <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
+                      <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
+                    </form>
+                  </li>
+                {% else %}
+                  <li><span class="dropdown-item">Nenhuma notificação</span></li>
+                {% endfor %}
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-center" href="{{ url_for('main.notifications_historico') }}">
+                    Ver Histórico de Notificações
+                  </a>
+                </li>
+              </ul>
+            </li>            
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.clientes') }}">Clientes</a>
+            </li>
+            {% if current_user.is_authenticated and current_user.role not in ['contabilidade', 'backoffice'] %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.billing') }}">Billing</a>
+            </li>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role in ['contabilidade', 'admin'] %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('accounting.manage_invoices') }}">
+                  Contabilidade
+                </a>
+              </li>
+            {% endif %}
+            {% if current_user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
+              </li>
+              {% if current_user.role == 'admin' %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ url_for('main.register') }}">Registrar</a>
+                </li>
+              {% endif %}
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Área principal do site -->
+    <div class="container mt-3">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS (inclui Popper.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Seu JS customizado (opcional) -->
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+
+    <!-- Função JavaScript para marcar notificações como lidas -->
+    <script>
+      function markAsRead(event, notifId) {
+        event.preventDefault(); // evita recarregar a página
+        fetch("{{ url_for('main.mark_notification_read', notif_id=0) }}".replace("0", notifId), {
+          method: "POST"
+        })
+        .then(response => {
+          if (response.ok) {
+            // Reload da página para atualizar o dropdown
+            window.location.reload();
+          } else {
+            alert("Erro ao marcar notificação como lida.");
+          }
+        })
+        .catch(err => console.error(err));
+        return false;
+      }
+    </script>
+  </body>
+</html>
+

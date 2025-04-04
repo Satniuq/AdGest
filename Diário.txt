@@ -1,0 +1,35 @@
++++++++
+USUARIOS
+
+Falta template para usuário, para se ver e editar as informações. E no menu devia haver um campo para user (com o nickname do user que estiver logado) que fosse ter a pagina do user. 
+
+++++
+NOTIFICAÇÕES
+
+Falta notificação quando se criam tarefas em assuntos partilhados (quer seja o criador do assunto quer seja um que tenha a partilha, todos recebem notificações de todos)
+
+Falta notificação de exclusão de assunto partilhado
+
+++
+quando se emite uma nota de assunto/prazo/tarefa partilhada ou que nos foi partilhada.
+
+
++++++
+MANTER REGISTO DE TUDO
+no template do editar assunto/tarefa/prazo, devia haver uma janelinha que aparecia com o hitorico do que ja aconteceu; quem e quando adicionou horas e quantas; quem editou e alterações. 
+Nos assuntos, quem criou/concluiu/adicionou horas/excluiu ou editou tarefas.
+
++++++++++++++
+USER FRIENDLY
+
+Botão voltar voltar a página anterior
+
+
++++++++
+REGRAS DE SEGURANÇA
+
+Quando fecho o terminal devia terminar a sessão
+
+
+
+

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Criar Prazo Judicial{% endblock %}
+{% block content %}
+<h2>Criar Prazo Judicial</h2>
+<form method="POST" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.client_existing) }}
+  {{ macros.render_field(form.client_new) }}
+  {{ macros.render_field(form.assunto) }}
+  {{ macros.render_field(form.processo) }}
+  {{ macros.render_field(form.prazo) }}
+  {{ macros.render_field(form.comentarios) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+<p><a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Voltar</a></p>
+{% endblock %}

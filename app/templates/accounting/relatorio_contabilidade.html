@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Relatório de Contabilidade{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2 class="mb-3">Relatório de Contabilidade</h2>
+  
+  <div class="mb-3">
+    <p><strong>Total de Documentos:</strong> {{ documentos|length }}</p>
+    <p><strong>Valor Total:</strong> {{ total_valor }} €</p>
+    <p><strong>Valor Pago:</strong> {{ total_paid }} €</p>
+    <p><strong>Valor Não Pago:</strong> {{ total_unpaid }} €</p>
+  </div>
+  
+  <div class="mb-3">
+    <h4>Filtros Aplicados:</h4>
+    <ul>
+      {% for key, value in filters.items() if value %}
+        <li><strong>{{ key|capitalize }}:</strong> {{ value }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        <th>Doc</th>
+        <th>Tipo</th>
+        <th>Data Emissão</th>
+        <th>Nº Cliente</th>
+        <th>Status</th>
+        <th>Advogado</th>
+        <th>Cliente</th>
+        <th>Valor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for doc in documentos %}
+        <tr>
+          <td>{{ doc.numero or doc.id }}</td>
+          <td>{{ doc.tipo }}</td>
+          <td>{% if doc.data_emissao %}{{ doc.data_emissao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %}</td>
+          <td>{{ doc.numero_cliente if doc.numero_cliente else 'N/A' }}</td>
+          <td>{{ doc.status_cobranca }}</td>
+          <td>{{ doc.advogado or 'N/A' }}</td>
+          <td>{{ doc.client.name }}</td>
+          <td>{{ doc.valor }} €</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <button onclick="window.print()" class="btn btn-primary">Imprimir Relatório</button>
+</div>
+{% endblock %}

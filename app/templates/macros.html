@@ -1,0 +1,71 @@
+{% macro render_field(field) %}
+  <div class="mb-3">
+    {{ field.label(class="form-label") }}
+    {{ field(class="form-control") }}
+    {% if field.errors %}
+      {% for error in field.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{% macro render_summary_card(label, assuntos, tarefas, prazos) %}
+  <div class="card mb-3">
+    <div class="card-header">
+      {{ label }}
+    </div>
+    <div class="card-body">
+      {% if assuntos|length > 0 or tarefas|length > 0 or prazos|length > 0 %}
+        {% if assuntos|length > 0 %}
+          <h5>Assuntos</h5>
+          <ul class="list-group list-group-flush">
+            {% for a in assuntos %}
+              <li class="list-group-item">
+                <strong>{{ a.nome_assunto }}</strong> ({{ a.client.name }})
+                <br>
+                Data: {% if a.due_date %}{{ a.due_date.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {% if tarefas|length > 0 %}
+          <h5 class="mt-3">Tarefas</h5>
+          <ul class="list-group list-group-flush">
+            {% for t in tarefas %}
+              <li class="list-group-item">
+                <strong>{{ t.nome_tarefa }}</strong>
+                {% if t.descricao %}
+                  - <em>{{ t.descricao }}</em>
+                {% endif %}
+                <br>
+                Data: {% if t.due_date %}{{ t.due_date.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %}
+                | Horas: {{ t.horas }}h
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {% if prazos|length > 0 %}
+          <h5 class="mt-3">Prazos</h5>
+          <ul class="list-group list-group-flush">
+            {% for p in prazos %}
+              <li class="list-group-item">
+                <strong>{{ p.assunto }}</strong>
+                {% if p.comentarios %}
+                  - <em>{{ p.comentarios }}</em>
+                {% endif %}
+                <br>
+                Processo: {{ p.processo }} | Data: {% if p.prazo %}{{ p.prazo.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %}
+                | Status: {{ 'Concluído' if p.status else 'Pendente' }}
+                | Horas: {{ p.horas }}h
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% else %}
+        <p>Nenhum item pendente para esta data.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endmacro %}
+

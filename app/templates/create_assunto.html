@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Criar/Editar Assunto{% endblock %}
+{% block content %}
+  <h2>Criar/Editar Assunto</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+
+    {% if form.errors %}
+      <div class="alert alert-danger">
+        <ul>
+          {% for field, errors in form.errors.items() %}
+            {% for error in errors %}
+              <li>{{ field }}: {{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="mb-3">
+      {{ form.client_existing.label }}<br>
+      {{ form.client_existing(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.client_new.label }}<br>
+      {{ form.client_new(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.nome_assunto.label }}<br>
+      {{ form.nome_assunto(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.due_date.label }}<br>
+      {{ form.due_date(type="date", class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.sort_order.label }}<br>
+      {{ form.sort_order(class="form-control") }}
+    </div>
+    <div>
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+  <p><a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Voltar</a></p>
+{% endblock %}

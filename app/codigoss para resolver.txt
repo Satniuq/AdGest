@@ -1,0 +1,202 @@
+ROUTES.PY
+
+#Rotas para notificações
+
+@main.route('/notifications')
+@login_required
+def notifications():
+    notifs = Notification.query.filter_by(user_id=current_user.id)\
+                               .order_by(Notification.timestamp.desc()).all()
+    return render_template('notifications.html', notifications=notifs)
+
+
+@main.route('/notifications/mark_read/<int:notif_id>', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    notif = Notification.query.get_or_404(notif_id)
+    if notif.user_id != current_user.id:
+        return jsonify({'status': 'error', 'message': 'Sem permissão'}), 403
+    notif.is_read = True
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@main.context_processor
+def inject_notifications():
+    if current_user.is_authenticated:
+        notifs = Notification.query.filter_by(user_id=current_user.id)\
+                                   .order_by(Notification.timestamp.desc()).all()
+        unread = sum(1 for n in notifs if not n.is_read)
+        return dict(notifications=notifs, unread_count=unread)
+    return dict(notifications=[], unread_count=0)
+
+def criar_notificacao(user_id, tipo, mensagem, link=None, extra_data=None):
+    notif = Notification(
+        user_id=user_id,
+        type=tipo,
+        message=mensagem,
+        link=link,
+        extra_data=extra_data  # se precisar enviar dados extras em formato JSON (como string)
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+
+@main.route('/notifications/respond_share/<int:notif_id>/<string:acao>', methods=['POST'])
+@login_required
+def respond_share(notif_id, acao):
+    # acao pode ser 'accept' ou 'decline'
+    notif = Notification.query.get_or_404(notif_id)
+    # Verifique se o usuário tem permissão
+    if notif.user_id != current_user.id:
+        flash("Você não tem permissão para responder essa notificação.", "danger")
+        return redirect(url_for('main.notifications'))
+    # Processa a ação, por exemplo, atualize a partilha do item com base em notif.extra_data
+    # (Aqui você precisa implementar a lógica específica: atualizar o status da partilha no item)
+    if acao == 'accept':
+        # Exemplo: marcar a partilha como aceita no item compartilhado
+        flash("Partilha aceita!", "success")
+    else:
+        flash("Partilha recusada.", "warning")
+    # Marque a notificação como lida (ou remova-a)
+    notif.is_read = True
+    db.session.commit()
+    return redirect(url_for('main.notifications'))
+
+
+''''''
+''''''
+BASE.HTML
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}AdGest{% endblock %}</title>
+
+    <!-- FontAwesome (ou outra biblioteca de ícones) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+    <!-- Seu CSS customizado (opcional) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">AdGest</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fa-solid fa-bell"></i>
+                {% if unread_count > 0 %}
+                  <span class="badge bg-danger">{{ unread_count }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotifications">
+                {% for notif in notifications %}
+                  <li>
+                    <a class="dropdown-item" href="{{ notif.link if notif.link else '#' }}">
+                      {{ notif.message }}
+                      <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </a>
+                  </li>
+                {% else %}
+                  <li><span class="dropdown-item">Nenhuma notificação</span></li>
+                {% endfor %}
+              </ul>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.clientes') }}">Clientes</a>
+            </li>
+            {% if current_user.is_authenticated and current_user.role not in ['contabilidade', 'backoffice'] %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.billing') }}">Billing</a>
+            </li>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role in ['contabilidade', 'admin'] %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('accounting.manage_invoices') }}">
+                  Contabilidade
+                </a>
+              </li>
+            {% endif %}
+            {% if current_user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
+              </li>
+              {% if current_user.role == 'admin' %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ url_for('main.register') }}">Registrar</a>
+                </li>
+              {% endif %}
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Área principal do site -->
+    <div class="container mt-3">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS (inclui Popper.js) -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+    ></script>
+
+    <!-- Seu JS customizado (opcional) -->
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+  </body>
+</html>
+
+
+'''''''''
+'''''''
+NOTIFICATIONS.HTML
+
+{% for notif in notifications %}
+  <div class="notification-item">
+    <p>{{ notif.message }}</p>
+    {% if notif.type == 'share_invite' %}
+      <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='accept') }}" class="btn btn-sm btn-success">Aceitar</a>
+      <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='decline') }}" class="btn btn-sm btn-danger">Recusar</a>
+    {% else %}
+      <a href="{{ notif.link if notif.link else '#' }}" class="btn btn-sm btn-primary">Ver</a>
+    {% endif %}
+    <small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+  </div>
+{% else %}
+  <p>Nenhuma notificação.</p>
+{% endfor %}

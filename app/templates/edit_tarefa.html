@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Editar Tarefa{% endblock %}
+{% block content %}
+<h2>Editar Tarefa</h2>
+<form method="POST" action="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.nome_tarefa) }}
+  {{ macros.render_field(form.descricao) }}
+  {{ macros.render_field(form.due_date) }}
+  {{ macros.render_field(form.sort_order) }}
+  {{ macros.render_field(form.horas) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}

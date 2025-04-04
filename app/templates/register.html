@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Registrar{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h2 class="mb-3">Registrar</h2>
+    {% if get_flashed_messages(category_filter=["danger"]) %}
+      <div class="alert alert-danger">
+        {% for message in get_flashed_messages(category_filter=["danger"]) %}
+          <p>{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <form method="POST">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.username.label }}<br>
+        {{ form.username(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.nickname.label }}<br>
+        {{ form.nickname(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.email.label }}<br>
+        {{ form.email(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.password.label }}<br>
+        {{ form.password(class="form-control") }}
+      </div>
+      <div class="mb-3">
+        {{ form.role.label }}<br>
+        {{ form.role(class="form-control") }}
+      </div>
+      <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    </form>    
+  </div>
+</div>
+{% endblock %}

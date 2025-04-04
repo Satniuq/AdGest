@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Editar Assunto{% endblock %}
+{% block content %}
+<h2>Editar Assunto</h2>
+<form method="POST" action="{{ url_for('main.edit_assunto', assunto_id=assunto.id) }}" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.client_existing) }}
+  {{ macros.render_field(form.client_new) }}
+  {{ macros.render_field(form.nome_assunto) }}
+  {{ macros.render_field(form.due_date) }}
+  {{ macros.render_field(form.sort_order) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}

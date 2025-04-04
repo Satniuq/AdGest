@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Criar Cliente{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Criar Novo Cliente</h2>
+  <form method="POST" class="needs-validation" novalidate>
+    {{ form.hidden_tag() }}
+    {{ macros.render_field(form.name) }}
+    {{ macros.render_field(form.number_interno) }}
+    {{ macros.render_field(form.nif) }}
+    {{ macros.render_field(form.address) }}
+    {{ macros.render_field(form.email) }}
+    {{ macros.render_field(form.telephone) }}
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar</a>
+  </form>
+</div>
+{% endblock %}

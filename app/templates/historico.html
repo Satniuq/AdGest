@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Histórico do Cliente - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2>Histórico do Cliente: {{ client.name }}</h2>
+
+  <!-- Seção de Assuntos e Tarefas -->
+  <h3>Assuntos e Tarefas</h3>
+  {% if client.assuntos %}
+    <div class="accordion" id="accordionAssuntos">
+      {% for assunto in client.assuntos %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingAssunto{{ assunto.id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAssunto{{ assunto.id }}" aria-expanded="false" aria-controls="collapseAssunto{{ assunto.id }}">
+              {{ assunto.nome_assunto }} – 
+              {% if assunto.due_date %}{{ assunto.due_date.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %} – 
+              {{ 'Concluído' if assunto.is_completed else 'Pendente' }} – 
+              Horas: {{ assunto.tarefas|map(attribute='horas')|sum }}h
+            </button>
+          </h2>
+          <div id="collapseAssunto{{ assunto.id }}" class="accordion-collapse collapse" aria-labelledby="headingAssunto{{ assunto.id }}" data-bs-parent="#accordionAssuntos">
+            <div class="accordion-body">
+              <h6>Tarefas</h6>
+              {% if assunto.tarefas %}
+                <ul class="list-group">
+                  {% for tarefa in assunto.tarefas %}
+                    <li class="list-group-item">
+                      <strong>{{ tarefa.nome_tarefa }}</strong> – {{ tarefa.descricao or '---' }}<br>
+                      Data: {% if tarefa.due_date %}{{ tarefa.due_date.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %} – 
+                      {{ 'Concluída' if tarefa.is_completed else 'Pendente' }} – 
+                      Horas: {{ tarefa.horas }}h
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p>Nenhuma tarefa cadastrada para este assunto.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>Nenhum assunto cadastrado.</p>
+  {% endif %}
+
+  <hr>
+
+  <!-- Seção de Prazos -->
+  <h3>Prazos Judiciais</h3>
+  <div class="row">
+    <div class="col-md-6">
+      <h4>Pendentes</h4>
+      {% set prazos_pendentes = client.prazos_judiciais | selectattr("status", "equalto", False) | list %}
+      {% if prazos_pendentes %}
+        <ul class="list-group">
+          {% for prazo in prazos_pendentes %}
+            <li class="list-group-item">
+              <strong>{{ prazo.assunto }}</strong> ({{ prazo.processo }})<br>
+              Data: {% if prazo.prazo %}{{ prazo.prazo.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %} – 
+              Horas: {{ prazo.horas }}h
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>Nenhum prazo pendente.</p>
+      {% endif %}
+    </div>
+    <div class="col-md-6">
+      <h4>Concluídos</h4>
+      {% set prazos_concluidos = client.prazos_judiciais | selectattr("status", "equalto", True) | list %}
+      {% if prazos_concluidos %}
+        <ul class="list-group">
+          {% for prazo in prazos_concluidos %}
+            <li class="list-group-item">
+              <strong>{{ prazo.assunto }}</strong> ({{ prazo.processo }})<br>
+              Data: {% if prazo.prazo %}{{ prazo.prazo.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %} – 
+              Horas: {{ prazo.horas }}h
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>Nenhum prazo concluído.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="text-end">
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar à lista de clientes</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Histórico de Notificações{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="my-4">Histórico de Notificações</h2>
+  {% if notifications %}
+    <ul class="list-group">
+      {% for notif in notifications %}
+        <li class="list-group-item">
+          <strong>{{ notif.message }}</strong>
+          <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+          {% if notif.link %}
+            <br><a href="{{ notif.link }}" class="btn btn-sm btn-primary mt-1">Ver</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Nenhuma notificação lida ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}
