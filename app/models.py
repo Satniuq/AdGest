@@ -1,3 +1,5 @@
+import json
+
 from . import db
 from flask_login import UserMixin
 from datetime import datetime, date
@@ -18,11 +20,12 @@ shared_clients = db.Table('shared_clients',
     db.Column('client_id', db.Integer, db.ForeignKey('clients.id'))
 )
 
-shared_tarefas = db.Table('shared_tarefas',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id', name='fk_shared_tarefas_user_id', ondelete="CASCADE")),
-    db.Column('tarefa_id', db.Integer, db.ForeignKey('tarefas.id', name='fk_shared_tarefas_tarefa_id', ondelete="CASCADE"))
-)
+#retirei a possibilidade de partilhar tarefas
 
+#shared_tarefas = db.Table('shared_tarefas',
+#    db.Column('user_id', db.Integer, db.ForeignKey('users.id', name='fk_shared_tarefas_user_id', ondelete="CASCADE")),
+#    db.Column('tarefa_id', db.Integer, db.ForeignKey('tarefas.id', name='fk_shared_tarefas_tarefa_id', ondelete="CASCADE"))
+#)
 
 
 # Usuário
@@ -43,12 +46,6 @@ class User(UserMixin, db.Model):
         'Assunto',
         secondary=shared_assuntos,
         backref=db.backref('compartilhados', lazy='dynamic'),
-        lazy='dynamic'
-    )
-    tarefas_compartilhadas = db.relationship(
-        'Tarefa',
-        secondary=shared_tarefas,
-        backref=db.backref('compartilhadas', lazy='dynamic'),
         lazy='dynamic'
     )
     
@@ -112,15 +109,6 @@ class Tarefa(db.Model):
     is_billed = db.Column(db.Boolean, default=False)
     data_conclusao = db.Column(db.Date, nullable=True)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-
-    shared_with = db.relationship(
-        'User',
-        secondary=shared_tarefas,
-        backref=db.backref('shared_tarefas', lazy='dynamic', passive_deletes=True, overlaps="compartilhadas,tarefas_compartilhadas"),
-        lazy='dynamic',
-        passive_deletes=True,
-        overlaps="compartilhadas,tarefas_compartilhadas"
-    )
 
     user = db.relationship("User", backref="tarefas_criadas", foreign_keys=lambda: [Tarefa.__table__.c.user_id])
 
@@ -287,6 +275,13 @@ class Notification(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     # Campo extra para guardar informações adicionais (pode ser um JSON com detalhes específicos)
     extra_data = db.Column(db.Text, nullable=True)
+
+    @property
+    def extra(self):
+        try:
+            return json.loads(self.extra_data) if self.extra_data else {}
+        except Exception:
+            return {}
 
     def __repr__(self):
         return f"<Notification {self.id} for User {self.user_id}: {self.type}>"

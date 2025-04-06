@@ -17,7 +17,7 @@
             <div class="ms-3 mb-2">
               <label class="{% if a_data.assunto.shared_with.count() > 0 %}shared-item{% endif %}">
                 <input type="checkbox" name="items" value="assunto-{{ a_data.assunto.id }}" class="subject-checkbox">
-                <strong>Assunto:</strong> {{ a_data.assunto.nome_assunto }} - Total Horas (tarefas): {{ a_data.assunto.tarefas|map(attribute='horas')|sum }}h
+                <strong>Assunto:</strong> {{ a_data.assunto.nome_assunto }} - Total Horas (tarefas): {{ a_data.tarefas|map(attribute='horas')|sum }}h
               </label>
               <!-- Link para reverter faturamento do assunto -->
               <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('assunto', {{ a_data.assunto.id }}); return false;">Reverter</a>
@@ -25,7 +25,7 @@
                 <ul>
                   {% for tarefa in a_data.tarefas %}
                     <li>
-                      <label class="{% if tarefa.shared_with.count() > 0 %}shared-item{% endif %}">
+                      <label class="{% if a_data.assunto.shared_with.count() > 0 %}shared-item{% endif %}">
                         <input type="checkbox" name="items" value="tarefa-{{ tarefa.id }}" data-subject-id="{{ a_data.assunto.id }}">
                         <strong>Tarefa:</strong> {{ tarefa.nome_tarefa }},
                         Horas: {{ tarefa.horas }}h,

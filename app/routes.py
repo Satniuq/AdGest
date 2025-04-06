@@ -1,11 +1,12 @@
 import csv
 import unicodedata
 from io import StringIO
+import json
 
 # Bibliotecas padrão
 from datetime import datetime, date, timedelta
 # Bibliotecas de terceiros
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, session, jsonify
+from flask import Blueprint, json, render_template, redirect, url_for, flash, request, current_app, session, jsonify
 from sqlalchemy import func, or_, and_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -15,10 +16,11 @@ from flask_login import login_user, logout_user, login_required, current_user
 from app.forms import (RegistrationForm, LoginForm, AssuntoForm, TarefaForm, 
                        PrazoJudicialForm, ClientForm, ShareForm)
 from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
-                        NotaHonorarios, ClientShare, shared_assuntos, shared_tarefas,
+                        NotaHonorarios, ClientShare, shared_assuntos,
                         shared_prazos, HoraAdicao, DocumentoContabilistico, Notification)
 from app.decorators import admin_required
 from app.decorators import handle_db_errors
+
 
 
 def normalize_header(header):
@@ -103,8 +105,7 @@ def dashboard():
     assuntos = Assunto.query.filter(
         or_(
             Assunto.user_id == current_user.id,
-            Assunto.shared_with.any(id=current_user.id),
-            Assunto.tarefas.any(Tarefa.shared_with.any(id=current_user.id))
+            Assunto.shared_with.any(id=current_user.id)
         ),
         Assunto.is_completed == False
     ).order_by(Assunto.sort_order, Assunto.nome_assunto).all()
@@ -112,17 +113,12 @@ def dashboard():
     # Cria um dicionário para as tarefas visíveis para o usuário em cada assunto
     assuntos_tarefas_visiveis = {}
     for assunto in assuntos:
-        # Se o assunto está compartilhado (tem pelo menos um usuário na lista),
-        # então todas as tarefas são visíveis para todos os participantes
+        # Se o assunto está compartilhado, todas as tarefas são visíveis
         if assunto.shared_with.count() > 0:
             tarefas_visiveis = assunto.tarefas
         else:
-            # Caso contrário, exibe apenas as tarefas criadas pelo usuário
-            # ou explicitamente compartilhadas com ele
-            tarefas_visiveis = []
-            for tarefa in assunto.tarefas:
-                if tarefa.user_id == current_user.id or tarefa.shared_with.filter_by(id=current_user.id).first():
-                    tarefas_visiveis.append(tarefa)
+            # Caso contrário, exibe somente as tarefas criadas pelo usuário
+            tarefas_visiveis = [tarefa for tarefa in assunto.tarefas if tarefa.user_id == current_user.id]
         assuntos_tarefas_visiveis[assunto.id] = tarefas_visiveis
 
     current_date = date.today()
@@ -191,10 +187,6 @@ def create_assunto():
 @handle_db_errors
 def edit_assunto(assunto_id):
     assunto = Assunto.query.get_or_404(assunto_id)
-    # Apenas o dono pode editar o assunto
-    if assunto.user_id != current_user.id:
-        flash("Não pode editar assuntos de outros usuarios.", "danger")
-        return redirect(url_for('main.dashboard'))
     form = AssuntoForm(obj=assunto)
     form.client_existing.query = Client.query
     form.client_existing.data = assunto.client
@@ -216,11 +208,13 @@ def edit_assunto(assunto_id):
             db.session.commit()
             flash('Assunto atualizado com sucesso!', 'success')
 
-            # Notifica os usuários compartilhados do assunto (exceto o usuário atual)
-            for user in assunto.shared_with:
+            # Define os usuários envolvidos: criador + usuários compartilhados
+            envolvidos = set()
+            envolvidos.add(assunto.user)
+            envolvidos.update(assunto.shared_with)
+            for user in envolvidos:
                 if user.id != current_user.id:
                     mensagem = f"{current_user.nickname} editou o assunto '{assunto.nome_assunto}'."
-                    # Ajuste o link conforme sua aplicação, por exemplo, para ver detalhes do assunto
                     link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
                     criar_notificacao(user.id, "update", mensagem, link)
             return redirect(url_for('main.dashboard'))
@@ -230,16 +224,17 @@ def edit_assunto(assunto_id):
             flash(f'Erro ao atualizar assunto: {str(e)}', 'danger')
     return render_template('edit_assunto.html', form=form, assunto=assunto)
 
+
 @main.route('/assunto/delete/<int:assunto_id>', methods=['POST'])
 @login_required
 def delete_assunto(assunto_id):
     assunto = Assunto.query.get_or_404(assunto_id)
-    # Apenas o dono pode excluir o assunto
     if assunto.user_id != current_user.id:
         flash("Não pode excluir assuntos de outros usuários.", "danger")
         return redirect(url_for('main.dashboard'))
     try:
-        # Remove os registros da tabela de associação de compartilhamento
+        # Armazena a lista de usuários compartilhados antes de deletar
+        shared_users = list(assunto.shared_with)
         db.session.execute(
             shared_assuntos.delete().where(shared_assuntos.c.assunto_id == assunto.id)
         )
@@ -247,11 +242,10 @@ def delete_assunto(assunto_id):
         db.session.commit()
         flash('Assunto excluído com sucesso!', 'success')
 
-        for user in assunto.shared_with:
+        for user in shared_users:
             if user.id != current_user.id:
                 mensagem = f"{current_user.nickname} excluiu o assunto '{assunto.nome_assunto}'."
                 criar_notificacao(user.id, "update", mensagem)
-
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'Erro ao excluir assunto: {str(e)}')
@@ -268,6 +262,11 @@ def toggle_status_assunto(assunto_id):
             assunto.data_conclusao = datetime.utcnow().date()
             assunto.completed_by = current_user.id
             acao = "concluído"
+            # Marca todas as tarefas como concluídas também
+            for tarefa in assunto.tarefas:
+                tarefa.is_completed = True
+                tarefa.data_conclusao = datetime.utcnow().date()
+                tarefa.completed_by = current_user.id
         else:
             assunto.data_conclusao = None
             assunto.completed_by = None
@@ -275,27 +274,21 @@ def toggle_status_assunto(assunto_id):
         db.session.commit()
         flash('Status do assunto atualizado!', 'success')
         
-        # Unir usuários a notificar: usuários compartilhados e o dono do assunto
-        notificados = set()
-        # Adiciona os usuários compartilhados
-        shared_users = assunto.shared_with.all() if hasattr(assunto.shared_with, 'all') else assunto.shared_with
-        for user in shared_users:
-            notificados.add(user)
-        # Adiciona o dono, mesmo que ele não esteja explicitamente na lista
-        notificados.add(assunto.user)
-        # Remove o usuário atual (quem executou a ação)
-        notificados = [user for user in notificados if user.id != current_user.id]
-        
-        for user in notificados:
-            mensagem = f"{current_user.nickname} marcou o assunto '{assunto.nome_assunto}' como {acao}."
-            link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
-            criar_notificacao(user.id, "update", mensagem, link)
-            
+        # Notifica os envolvidos (criador e usuários partilhados, exceto o atual)
+        envolvidos = set()
+        envolvidos.add(assunto.user)
+        envolvidos.update(assunto.shared_with.all() if hasattr(assunto.shared_with, 'all') else assunto.shared_with)
+        for user in envolvidos:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} marcou o assunto '{assunto.nome_assunto}' como {acao}."
+                link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "update", mensagem, link)
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'Erro ao alterar status do assunto: {str(e)}')
         flash(f'Erro ao alterar status do assunto: {str(e)}', 'danger')
     return redirect(url_for('main.dashboard'))
+
 
 @main.route('/tarefa/create/<int:assunto_id>', methods=['GET', 'POST'])
 @login_required
@@ -314,12 +307,23 @@ def create_tarefa(assunto_id):
                 horas=form.horas.data or 0.0,
                 is_completed=False
             )
-            # Se houver seleção de usuários para partilha, associe-os
-            if form.shared_with.data:
-                nova.shared_with = form.shared_with.data
             db.session.add(nova)
             db.session.commit()
             flash('Tarefa criada com sucesso!', 'success')
+
+            # Define o conjunto de usuários envolvidos:
+            # Inclui o criador do assunto e todos os usuários compartilhados.
+            envolvidos = set()
+            envolvidos.add(assunto.user)
+            envolvidos.update(assunto.shared_with)
+            
+            # Envia notificação para todos os envolvidos, exceto quem criou a tarefa.
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} criou a nova tarefa '{nova.nome_tarefa}' no assunto '{assunto.nome_assunto}'."
+                    link = url_for('main.tarefa_info', tarefa_id=nova.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
+            
             return redirect(url_for('main.dashboard'))
         except Exception as e:
             db.session.rollback()
@@ -332,11 +336,7 @@ def create_tarefa(assunto_id):
 @handle_db_errors
 def edit_tarefa(tarefa_id):
     tarefa = Tarefa.query.get_or_404(tarefa_id)
-    if tarefa.user_id != current_user.id:
-        flash("Não pode editar tarefas de outros usuários.", "danger")
-        return redirect(url_for('main.dashboard'))
     form = TarefaForm(obj=tarefa)
-    form.shared_with.data = tarefa.shared_with
     if form.validate_on_submit():
         try:
             tarefa.nome_tarefa = form.nome_tarefa.data
@@ -344,12 +344,14 @@ def edit_tarefa(tarefa_id):
             tarefa.due_date = form.due_date.data
             tarefa.sort_order = form.sort_order.data or 0
             tarefa.horas = form.horas.data or 0.0
-            tarefa.shared_with = form.shared_with.data
             db.session.commit()
             flash('Tarefa atualizada com sucesso!', 'success')
             
-            # Notifica os usuários compartilhados
-            for user in tarefa.shared_with:
+            # Define os usuários envolvidos: criador da tarefa e usuários compartilhados do assunto
+            envolvidos = set()
+            envolvidos.add(tarefa.user)
+            envolvidos.update(tarefa.assunto.shared_with)
+            for user in envolvidos:
                 if user.id != current_user.id:
                     mensagem = f"{current_user.nickname} editou a tarefa '{tarefa.nome_tarefa}'."
                     link = url_for('main.tarefa_info', tarefa_id=tarefa.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
@@ -362,6 +364,7 @@ def edit_tarefa(tarefa_id):
             flash(f'Erro ao atualizar tarefa: {str(e)}', 'danger')
     return render_template('edit_tarefa.html', form=form, tarefa=tarefa)
 
+
 @main.route('/tarefa/delete/<int:tarefa_id>', methods=['POST'])
 @login_required
 def delete_tarefa(tarefa_id):
@@ -370,15 +373,11 @@ def delete_tarefa(tarefa_id):
         flash("Não pode excluir tarefas de outros usuários.", "danger")
         return redirect(url_for('main.dashboard'))
     # Notifica os usuários antes da exclusão
-    for user in tarefa.shared_with:
+    for user in tarefa.assunto.shared_with:
         if user.id != current_user.id:
             mensagem = f"{current_user.nickname} excluiu a tarefa '{tarefa.nome_tarefa}'."
-            # Link pode ser omitido se o item não existir mais
             criar_notificacao(user.id, "update", mensagem)
     try:
-        db.session.execute(
-            shared_tarefas.delete().where(shared_tarefas.c.tarefa_id == tarefa.id)
-        )
         db.session.delete(tarefa)
         db.session.commit()
         flash('Tarefa excluída com sucesso!', 'success')
@@ -407,10 +406,6 @@ def add_hours_tarefa(tarefa_id):
         
         # Cria um conjunto para unificar os usuários a serem notificados
         notificados = set()
-        # Adiciona os usuários explicitamente compartilhados na tarefa
-        tarefa_users = tarefa.shared_with.all() if hasattr(tarefa.shared_with, 'all') else tarefa.shared_with
-        for user in tarefa_users:
-            notificados.add(user)
         # Adiciona os usuários compartilhados no assunto
         assunto_users = tarefa.assunto.shared_with.all() if hasattr(tarefa.assunto.shared_with, 'all') else tarefa.assunto.shared_with
         for user in assunto_users:
@@ -451,16 +446,12 @@ def toggle_status_tarefa(tarefa_id):
         db.session.commit()
         flash('Status da tarefa atualizado!', 'success')
         
-        # Unir usuários a notificar: usuários compartilhados na tarefa e os usuários compartilhados no assunto
         notificados = set()
-        tarefa_users = tarefa.shared_with.all() if hasattr(tarefa.shared_with, 'all') else tarefa.shared_with
-        for user in tarefa_users:
-            notificados.add(user)
-        # Adiciona os usuários do assunto compartilhado
+        # Adiciona os usuários compartilhados do assunto
         assunto_users = tarefa.assunto.shared_with.all() if hasattr(tarefa.assunto.shared_with, 'all') else tarefa.assunto.shared_with
         for user in assunto_users:
             notificados.add(user)
-        # Adiciona o dono do assunto (se não for o usuário atual)
+        # Adiciona o dono do assunto
         notificados.add(tarefa.assunto.user)
         # Remove o usuário que executou a ação
         notificados = [user for user in notificados if user.id != current_user.id]
@@ -475,6 +466,7 @@ def toggle_status_tarefa(tarefa_id):
         current_app.logger.error(f'Erro ao alterar status da tarefa: {str(e)}')
         flash(f'Erro ao alterar status da tarefa: {str(e)}', 'danger')
     return redirect(url_for('main.dashboard'))
+
 
 @main.route('/prazos/create', methods=['GET', 'POST'])
 @login_required
@@ -527,9 +519,7 @@ def create_prazo():
 @login_required
 def edit_prazo(prazo_id):
     prazo = PrazoJudicial.query.get_or_404(prazo_id)
-    if prazo.user_id != current_user.id:
-        flash("Não pode editar prazos de outros usuários.", "danger")
-        return redirect(url_for('main.dashboard'))
+    old_shared = list(prazo.shared_with)  # Se necessário para comparação ou para notificações
     form = PrazoJudicialForm(obj=prazo)
     form.client_existing.query = Client.query
     form.client_existing.data = prazo.client
@@ -545,24 +535,36 @@ def edit_prazo(prazo_id):
                 db.session.add(new_client)
                 db.session.commit()
                 prazo.client_id = new_client.id
+
             prazo.assunto = form.assunto.data
             prazo.processo = form.processo.data
             prazo.prazo = form.prazo.data
             prazo.comentarios = form.comentarios.data or ''
-            prazo.shared_with = form.shared_with.data
+            
+            # Atualiza o compartilhamento sem remover os já existentes
+            if current_user.id == prazo.user_id:
+                # Se o editor é o criador, preserva os compartilhamentos já existentes e adiciona os novos
+                prazo.shared_with = list(set(prazo.shared_with).union(set(form.shared_with.data)))
+            else:
+                # Se o editor não é o criador, utiliza os dados do formulário,
+                # mas garante que o próprio usuário que está editando continue na partilha
+                prazo.shared_with = form.shared_with.data
+                if current_user not in prazo.shared_with:
+                    prazo.shared_with.append(current_user)
+            
             prazo.horas = form.horas.data or 0.0
             db.session.commit()
             flash('Prazo atualizado com sucesso!', 'success')
 
-            # Verifica se há usuários compartilhados e notifica-os
-            if prazo.shared_with.count() > 0:
-                for user in prazo.shared_with.all():
-                    if user.id != current_user.id:
-                        mensagem = f"{current_user.nickname} editou o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
-                        link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
-                        criar_notificacao(user.id, "update", mensagem, link)
-            else:
-                current_app.logger.info("Prazo não possui usuários compartilhados para notificar.")
+            # Notifica todos os envolvidos: criador + todos os usuários compartilhados
+            envolvidos = set()
+            envolvidos.add(prazo.user)
+            envolvidos.update(prazo.shared_with)
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} editou o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+                    link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
             return redirect(url_for('main.dashboard'))
         except Exception as e:
             db.session.rollback()
@@ -575,11 +577,12 @@ def edit_prazo(prazo_id):
 @login_required
 def delete_prazo(prazo_id):
     prazo = PrazoJudicial.query.get_or_404(prazo_id)
-    # Permite exclusão somente se o usuário for o dono do prazo
     if prazo.user_id != current_user.id:
         flash("Não pode excluir prazos de outros usuários.", "danger")
         return redirect(url_for('main.dashboard'))
     try:
+        # Armazena os usuários compartilhados antes de deletar
+        shared_users = list(prazo.shared_with)
         db.session.execute(
             shared_prazos.delete().where(shared_prazos.c.prazo_id == prazo.id)
         )
@@ -587,16 +590,16 @@ def delete_prazo(prazo_id):
         db.session.commit()
         flash('Prazo excluído com sucesso!', 'success')
 
-        for user in prazo.shared_with:
+        for user in shared_users:
             if user.id != current_user.id:
                 mensagem = f"{current_user.nickname} excluiu o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
                 criar_notificacao(user.id, "update", mensagem)
-
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'Erro ao excluir prazo: {str(e)}')
         flash(f'Erro ao excluir prazo: {str(e)}', 'danger')
     return redirect(url_for('main.dashboard'))
+
 
 @main.route('/prazo/add_hours/<int:prazo_id>', methods=['POST'])
 @login_required
@@ -885,6 +888,117 @@ def edit_client(client_id):
             return redirect(url_for('main.edit_client', client_id=client.id))
     return render_template('edit_client.html', client=client)
 
+#rotas para partilhar clientes
+
+@main.route('/share_client/<int:client_id>', methods=['GET', 'POST'])
+@login_required
+def share_client(client_id):
+    client = Client.query.get_or_404(client_id)
+    form = ShareForm()  # Já existe o seu ShareForm com o campo shared_with
+
+    # Preencha as choices do campo shared_with, se necessário:
+    # form.shared_with.query = User.query.filter(...)
+
+    if form.validate_on_submit():
+        client.shared_with = form.shared_with.data
+        db.session.commit()
+        flash("Compartilhamento atualizado com sucesso!", "success")
+        
+        #partilhar clientes
+        for user in form.shared_with.data:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o cliente {client.name}"
+                link = url_for('main.verificar_cliente_partilhado', cliente_id=client.id)
+                criar_notificacao(
+                    user.id,
+                    "share_invite",
+                    mensagem,
+                    link,
+                    extra_data={"cliente_id": int(client.id)}
+                )
+
+        return redirect(url_for('main.clientes'))
+
+    return render_template('partilhar_cliente.html', client=client, form=form)
+
+@main.route('/verificar_cliente_partilhado/<int:cliente_id>')
+@login_required
+def verificar_cliente_partilhado(cliente_id):
+    cliente_partilhado = Client.query.get_or_404(cliente_id)
+
+    # Tenta encontrar um cliente existente para o User 2
+    if cliente_partilhado.number_interno:
+        cliente_existente = Client.query.filter_by(
+            user_id=current_user.id,
+            number_interno=cliente_partilhado.number_interno
+        ).first()
+    else:
+        cliente_existente = Client.query.filter(
+            Client.user_id == current_user.id,
+            func.lower(Client.name) == cliente_partilhado.name.lower()
+        ).first()
+
+    # Marcar todas as notificações do tipo 'share_invite' relacionadas a este cliente como lidas
+    notifs = Notification.query.filter_by(
+        user_id=current_user.id,
+        type="share_invite",
+        is_read=False
+    ).all()
+    for notif in notifs:
+        # Se a notificação extra_data contiver o cliente_id igual ao que estamos verificando
+        if notif.extra.get('cliente_id') == cliente_partilhado.id:
+            notif.is_read = True
+    db.session.commit()
+
+    return render_template('verificar_cliente.html',
+                           cliente_partilhado=cliente_partilhado,
+                           cliente_existente=cliente_existente)
+
+
+@main.route('/resolver_conflitos_cliente/<int:cliente_existente_id>', methods=['POST'])
+@login_required
+def resolver_conflitos_cliente(cliente_existente_id):
+    cliente_existente = Client.query.filter_by(id=cliente_existente_id, user_id=current_user.id).first_or_404()
+    cliente_partilhado_id = request.form.get('cliente_partilhado_id')
+    cliente_partilhado = Client.query.get(cliente_partilhado_id)
+
+    # Lista de campos a resolver
+    campos = ['name', 'number_interno', 'nif', 'address', 'email', 'telephone']
+    for campo in campos:
+        choice = request.form.get(f"{campo}_choice")
+        if choice == 'user1':
+            setattr(cliente_existente, campo, getattr(cliente_partilhado, campo))
+        # Se a escolha for 'user2', mantemos o valor atual; se desejar concatenar ou outro tratamento, ajuste aqui.
+
+    db.session.commit()
+    flash("Informações do cliente atualizadas com sucesso!", "success")
+    return redirect(url_for('main.client_info', client_id=cliente_existente.id))
+
+@main.route('/criar_cliente_partilhado/<int:cliente_partilhado_id>')
+@login_required
+def criar_cliente_partilhado(cliente_partilhado_id):
+    cliente_partilhado = Client.query.get_or_404(cliente_partilhado_id)
+    # Verifica se já existe um cliente com o mesmo nome para o usuário atual
+    existente = Client.query.filter_by(user_id=current_user.id, name=cliente_partilhado.name).first()
+    if existente:
+        flash("Você já possui um cliente com esse nome. Por favor, verifique.", "warning")
+        return redirect(url_for('main.client_info', client_id=existente.id))
+    
+    # Caso contrário, cria a cópia
+    novo_cliente = Client(
+        user_id=current_user.id,
+        name=cliente_partilhado.name,
+        number_interno=cliente_partilhado.number_interno,
+        nif=cliente_partilhado.nif,
+        address=cliente_partilhado.address,
+        email=cliente_partilhado.email,
+        telephone=cliente_partilhado.telephone
+    )
+    db.session.add(novo_cliente)
+    db.session.commit()
+    flash("Novo cliente criado com os dados partilhados!", "success")
+    return redirect(url_for('main.client_info', client_id=novo_cliente.id))
+
 
 @main.route('/historico/<int:client_id>')
 @login_required
@@ -912,6 +1026,8 @@ def historico_cliente(client_id):
         tarefas_concluidas=tarefas_concluidas,
         tarefas_pendentes=tarefas_pendentes
     )
+
+#Rotas para Billing
 
 @main.route('/billing', methods=['GET', 'POST'])
 @login_required
@@ -1029,18 +1145,17 @@ def billing():
             if c_id not in grouped_data:
                 grouped_data[c_id] = {"client": a.client, "assuntos": {}, "prazos": []}
             # Inclua todas as tarefas concluídas do assunto
-            tasks = [t for t in a.tarefas if t.is_completed]
+            tasks = Tarefa.query.filter(
+                Tarefa.assunto_id == a.id,
+                Tarefa.is_completed == True,
+                Tarefa.is_billed == False
+            ).all()
             grouped_data[c_id]["assuntos"][a.id] = {"assunto": a, "tarefas": tasks}
         
          # Adicionar tarefas concluídas que não foram incluídas no agrupamento por assunto       
         billable_tarefas = Tarefa.query.filter(
             Tarefa.is_completed == True,
             Tarefa.is_billed == False,
-            or_(
-                Tarefa.user_id == current_user.id,
-                Tarefa.shared_with.any(id=current_user.id),
-                Tarefa.completed_by == current_user.id
-            )
         ).all()
         for t in billable_tarefas:
             subj_id = t.assunto.id
@@ -1109,11 +1224,19 @@ def billing_historico():
     pagination = query.paginate(page=page, per_page=5)
     return render_template('billing_historico.html', nota_honorarios=pagination.items, pagination=pagination)
 
+from sqlalchemy import or_
+
 @main.route('/billing_cliente/<int:client_id>')
 @login_required
 def billing_cliente(client_id):
     client = Client.query.get_or_404(client_id)
-    billing_notes = NotaHonorarios.query.filter_by(client_id=client_id, user_id=current_user.id).order_by(NotaHonorarios.created_at.desc()).all()
+    billing_notes = NotaHonorarios.query.filter(
+        NotaHonorarios.client_id == client_id,
+        or_(
+            NotaHonorarios.user_id == current_user.id,
+            NotaHonorarios.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
+        )
+    ).order_by(NotaHonorarios.created_at.desc()).all()
     return render_template('billing_cliente.html', client=client, billing_notes=billing_notes)
 
 @main.route('/billing/revert/<string:item_type>/<int:item_id>', methods=['POST'])
@@ -1202,7 +1325,7 @@ def delete_cliente(client_id):
         flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
     return redirect(url_for('main.clientes'))
 
-# Rotas para compartilhar assuntos, tarefas, prazos, clientes
+# Rotas para compartilhar assuntos prazos, clientes
 
 @main.route('/assunto/share/<int:assunto_id>', methods=['GET', 'POST'])
 @login_required
@@ -1217,12 +1340,6 @@ def share_assunto(assunto_id):
         novos_usuarios = form.shared_with.data
         assunto.shared_with = novos_usuarios
 
-        # Propaga o compartilhamento para todas as tarefas do assunto
-        for tarefa in assunto.tarefas:
-            for user in novos_usuarios:
-                if user not in tarefa.shared_with:
-                    tarefa.shared_with.append(user)
-                    
         db.session.commit()
         flash("Assunto e todas as tarefas associadas foram compartilhados com sucesso!", "success")
         
@@ -1237,29 +1354,6 @@ def share_assunto(assunto_id):
         return redirect(url_for('main.dashboard'))
     return render_template('share_assunto.html', form=form, assunto=assunto)
 
-@main.route('/tarefa/share/<int:tarefa_id>', methods=['GET', 'POST'])
-@login_required
-def share_tarefa(tarefa_id):
-    tarefa = Tarefa.query.get_or_404(tarefa_id)
-    if tarefa.user_id != current_user.id:
-        flash("Não pode compartilhar tarefas de outros usuários.", "danger")
-        return redirect(url_for('main.dashboard'))
-    form = ShareForm(obj=tarefa)
-    if form.validate_on_submit():
-        novos_usuarios = form.shared_with.data
-        tarefa.shared_with = novos_usuarios
-        db.session.commit()
-        flash("Tarefa compartilhada com sucesso!", "success")
-        
-        # Gera notificações para os usuários (exceto o usuário atual)
-        for user in novos_usuarios:
-            if user.id != current_user.id:
-                mensagem = f"{current_user.nickname} partilhou consigo a tarefa {tarefa.nome_tarefa}"
-                link = url_for('main.tarefa_info', tarefa_id=tarefa.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
-                criar_notificacao(user.id, "share_invite", mensagem, link)
-        
-        return redirect(url_for('main.dashboard'))
-    return render_template('share_tarefa.html', form=form, tarefa=tarefa)
 
 @main.route('/prazo/share/<int:prazo_id>', methods=['GET', 'POST'])
 @login_required
@@ -1291,7 +1385,9 @@ def share_prazo(prazo_id):
 @login_required
 def notifications():
     notifs = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
-                           .order_by(Notification.timestamp.desc()).all()
+                               .order_by(Notification.timestamp.desc()).all()
+    for n in notifs:
+        current_app.logger.info(f"Notificação {n.id}: type={n.type}, extra={n.extra}")
     return render_template('notifications.html', notifications=notifs)
 
 
@@ -1304,6 +1400,32 @@ def mark_notification_read(notif_id):
     notif.is_read = True
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+@main.route('/notification/view/<int:notif_id>')
+@login_required
+def notification_view(notif_id):
+    """Marca a notificação como lida e redireciona para a página de verificação ou link associado."""
+    notif = Notification.query.get_or_404(notif_id)
+
+    # Verifica se a notificação pertence ao usuário atual
+    if notif.user_id != current_user.id:
+        flash("Você não tem permissão para ver essa notificação.", "danger")
+        return redirect(url_for('main.notifications'))
+
+    # Marca a notificação como lida
+    notif.is_read = True
+    db.session.commit()
+
+    # Se for do tipo share_invite e tiver extra_data com cliente_id, redireciona para a verificação
+    if notif.type == 'share_invite' and notif.extra.get('cliente_id'):
+        return redirect(url_for('main.verificar_cliente_partilhado', cliente_id=notif.extra.get('cliente_id')))
+
+    # Caso contrário, redireciona para o link ou para o dashboard
+    if notif.link:
+        return redirect(notif.link)
+    else:
+        return redirect(url_for('main.dashboard'))
+
 
 @main.context_processor
 def inject_notifications():
@@ -1323,17 +1445,23 @@ def notifications_historico():
     ).order_by(Notification.timestamp.desc()).all()
     return render_template('notifications_historico.html', notifications=notifs_lidas)
 
+import json
 
 def criar_notificacao(user_id, tipo, mensagem, link=None, extra_data=None):
+    if extra_data is None:
+        extra_data = {}
+    # Converte o dicionário extra_data para uma string JSON
+    extra_data_json = json.dumps(extra_data)
     notif = Notification(
         user_id=user_id,
         type=tipo,
         message=mensagem,
         link=link,
-        extra_data=extra_data  # se precisar enviar dados extras em formato JSON (como string)
+        extra_data=extra_data_json
     )
     db.session.add(notif)
     db.session.commit()
+
 
 @main.route('/notifications/respond_share/<int:notif_id>/<string:acao>', methods=['POST'])
 @login_required

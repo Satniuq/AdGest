@@ -43,7 +43,11 @@
                 <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
               {% endif %}
             </div>
-          </div>                                                 
+            <div>
+              <!-- Novo Botão de Partilhar -->
+              <a href="{{ url_for('main.share_client', client_id=client.id) }}" class="btn btn-sm btn-info">Partilhar</a>
+            </div>
+          </div>                                                  
         </div>
       </div>
     {% endfor %}

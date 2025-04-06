@@ -46,10 +46,20 @@
                       {{ notif.message }}  
                       <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
                     </div>
-                    <!-- Botão para marcar como lida via AJAX ou form -->
-                    <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
-                      <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
-                    </form>
+                    {% if notif.type == 'share_invite' %}
+                      <div class="d-flex flex-column">
+                        {% set cid = notif.extra.get('cliente_id') %}
+                          {% if cid %}
+                            <a href="{{ url_for('main.verificar_cliente_partilhado', cliente_id=cid) }}" class="btn btn-sm btn-primary">Verificar</a>
+                          {% else %}
+                            <a href="{{ notif.link if notif.link else '#' }}" class="btn btn-sm btn-primary">Ver</a>
+                          {% endif %}
+                      </div>
+                    {% else %}
+                      <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
+                        <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
+                      </form>
+                    {% endif %}
                   </li>
                 {% else %}
                   <li><span class="dropdown-item">Nenhuma notificação</span></li>
@@ -60,7 +70,7 @@
                     Ver Histórico de Notificações
                   </a>
                 </li>
-              </ul>
+              </ul>                           
             </li>            
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>
@@ -465,7 +475,11 @@
                 <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
               {% endif %}
             </div>
-          </div>                                                 
+            <div>
+              <!-- Novo Botão de Partilhar -->
+              <a href="{{ url_for('main.share_client', client_id=client.id) }}" class="btn btn-sm btn-info">Partilhar</a>
+            </div>
+          </div>                                                  
         </div>
       </div>
     {% endfor %}
@@ -1527,8 +1541,15 @@
   <div class="notification-item">
     <p>{{ notif.message }}</p>
     {% if notif.type == 'share_invite' %}
+      <!-- Botões para aceitar/recusar a partilha -->
       <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='accept') }}" class="btn btn-sm btn-success">Aceitar</a>
       <a href="{{ url_for('main.respond_share', notif_id=notif.id, acao='decline') }}" class="btn btn-sm btn-danger">Recusar</a>
+      <!-- Botão para ir à página de verificação -->
+      {% if notif.extra.cliente_id %}
+        <a href="{{ url_for('main.verificar_cliente_partilhado', cliente_id=notif.extra.cliente_id) }}" class="btn btn-sm btn-primary">Inspecionar</a>
+      {% else %}
+        <a href="{{ notif.link if notif.link else '#' }}" class="btn btn-sm btn-primary">Ver</a>
+      {% endif %}
     {% else %}
       <a href="{{ notif.link if notif.link else '#' }}" class="btn btn-sm btn-primary">Ver</a>
     {% endif %}
@@ -1561,6 +1582,23 @@
     <p>Nenhuma notificação lida ainda.</p>
   {% endif %}
 </div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\templates\partilhar_cliente.html --
+{% extends "base.html" %}
+{% block title %}Compartilhar Cliente{% endblock %}
+{% block content %}
+  <h2>Compartilhar Cliente: {{ client.name }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-link">Cancelar</a>
+  </form>
 {% endblock %}
 
 --------------------------------------------------------------------------------
@@ -1716,33 +1754,6 @@
 {% endblock %}
 
 --------------------------------------------------------------------------------
--- Conteúdo do ficheiro: C:\Python\AdGest\app\templates\share_client.html --
-{% extends "base.html" %}
-{% block title %}Compartilhar Cliente{% endblock %}
-
-{% block content %}
-<div class="container">
-  <h2 class="text-center my-4">Compartilhar Cliente: {{ client.name }}</h2>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    
-    <div class="mb-3">
-      {{ form.shared_with.label(class="form-label") }}
-      {{ form.shared_with(class="form-control") }}
-    </div>
-    
-    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Cancelar</a>
-  </form>
-  {% if form.errors %}
-    <div class="alert alert-danger mt-3">
-      {{ form.errors }}
-    </div>
-  {% endif %}
-</div>
-{% endblock %}
-
---------------------------------------------------------------------------------
 -- Conteúdo do ficheiro: C:\Python\AdGest\app\templates\share_prazo.html --
 {% extends "base.html" %}
 {% block title %}Compartilhar Prazo{% endblock %}
@@ -1792,6 +1803,52 @@
     </div>
     <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
   </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+-- Conteúdo do ficheiro: C:\Python\AdGest\app\templates\verificar_cliente.html --
+{% extends "base.html" %}
+{% block title %}Verificar Cliente Partilhado{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2>Verificação de Cliente Partilhado</h2>
+  {% if cliente_existente %}
+    <p>Já existe um cliente com dados semelhantes. Atualizar informações?</p>
+    <form method="POST" action="{{ url_for('main.resolver_conflitos_cliente', cliente_existente_id=cliente_existente.id) }}">
+      <!-- Inclua um campo hidden para identificar o cliente partilhado -->
+      <input type="hidden" name="cliente_partilhado_id" value="{{ cliente_partilhado.id }}">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Campo</th>
+            <th>Dados do Cliente Partilhado</th>
+            <th>Dados do Cliente Existente</th>
+            <th>Escolha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for campo in ['name', 'number_interno', 'nif', 'address', 'email', 'telephone'] %}
+          <tr>
+            <td>{{ campo|capitalize }}</td>
+            <td>{{ cliente_partilhado | get_attr(campo) or 'N/A' }}
+            <td>{{ cliente_existente | get_attr(campo) or 'N/A' }}</td>
+            <td>
+              <select name="{{ campo }}_choice" class="form-control">
+                <option value="user1">Usar do Cliente Partilhado</option>
+                <option value="user2">Manter Cliente Existente</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Atualizar Informações</button>
+    </form>
+  {% else %}
+    <p>Não existe um cliente com dados similares. Deseja criar um novo cliente com os dados partilhados?</p>
+    <a href="{{ url_for('main.criar_cliente_partilhado', cliente_partilhado_id=cliente_partilhado.id) }}" class="btn btn-success">Criar Novo Cliente</a>
+  {% endif %}
 </div>
 {% endblock %}
 

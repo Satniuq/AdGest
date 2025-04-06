@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Verificar Cliente Partilhado{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2>Verificação de Cliente Partilhado</h2>
+  {% if cliente_existente %}
+    <p>Já existe um cliente com dados semelhantes. Atualizar informações?</p>
+    <form method="POST" action="{{ url_for('main.resolver_conflitos_cliente', cliente_existente_id=cliente_existente.id) }}">
+      <!-- Inclua um campo hidden para identificar o cliente partilhado -->
+      <input type="hidden" name="cliente_partilhado_id" value="{{ cliente_partilhado.id }}">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Campo</th>
+            <th>Dados do Cliente Partilhado</th>
+            <th>Dados do Cliente Existente</th>
+            <th>Escolha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for campo in ['name', 'number_interno', 'nif', 'address', 'email', 'telephone'] %}
+          <tr>
+            <td>{{ campo|capitalize }}</td>
+            <td>{{ getattr(cliente_partilhado, campo) or 'N/A' }}</td>
+            <td>{{ cliente_existente | get_attr(campo) or 'N/A' }}</td>
+            <td>
+              <select name="{{ campo }}_choice" class="form-control">
+                <option value="user1">Usar do Cliente Partilhado</option>
+                <option value="user2">Manter Cliente Existente</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Atualizar Informações</button>
+    </form>
+  {% else %}
+    <p>Não existe um cliente com dados similares. Deseja criar um novo cliente com os dados partilhados?</p>
+    <a href="{{ url_for('main.criar_cliente_partilhado', cliente_partilhado_id=cliente_partilhado.id) }}" class="btn btn-success">Criar Novo Cliente</a>
+  {% endif %}
+</div>
+{% endblock %}

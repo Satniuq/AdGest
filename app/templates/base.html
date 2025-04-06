@@ -45,10 +45,15 @@
                       {{ notif.message }}  
                       <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
                     </div>
-                    <!-- Botão para marcar como lida via AJAX ou form -->
-                    <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
-                      <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
-                    </form>
+                    {% if notif.type == 'share_invite' and notif.extra.get('cliente_id') is not none %}
+                      {# Botão para notificações de partilha de cliente: chama notification_view que marca a notificação como lida e redireciona #}
+                      <a href="{{ url_for('main.notification_view', notif_id=notif.id) }}" class="btn btn-sm btn-primary">Verificar</a>
+                    {% else %}
+                      {# Para os demais casos, mantém o botão de marcar como lida #}
+                      <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
+                        <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
+                      </form>
+                    {% endif %}
                   </li>
                 {% else %}
                   <li><span class="dropdown-item">Nenhuma notificação</span></li>
@@ -59,7 +64,7 @@
                     Ver Histórico de Notificações
                   </a>
                 </li>
-              </ul>
+              </ul>                           
             </li>            
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>

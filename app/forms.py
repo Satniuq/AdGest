@@ -80,13 +80,7 @@ class TarefaForm(FlaskForm):
     due_date = DateField('Data da Tarefa', validators=[Optional()], format='%Y-%m-%d')
     sort_order = IntegerField('Ordem', validators=[Optional()])
     horas = FloatField('Horas (opcional)', validators=[Optional()])
-    # NOVO: campo de partilha para tarefas
-    shared_with = QuerySelectMultipleField(
-        'Compartilhar com',
-        query_factory=usuarios_query,
-        get_label='nickname',
-        validators=[Optional()]
-    )
+    
     submit = SubmitField('Salvar Tarefa')
 
 class PrazoJudicialForm(FlaskForm):

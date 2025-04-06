@@ -28,6 +28,16 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+    
+    # Disponibiliza getattr no ambiente Jinja
+    app.jinja_env.globals['getattr'] = getattr
+
+    login_manager.login_view = 'main.login'
+    
+    from app.models import User
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
 
     # Configuração de logging
     if not os.path.exists('logs'):
@@ -45,6 +55,17 @@ def create_app():
     def inject_today():
         from datetime import date
         return dict(today=date.today())
+    
+    # --- Definição do filtro personalizado ---
+    def get_attr(obj, attr_name):
+        try:
+            return getattr(obj, attr_name)
+        except AttributeError:
+            return None
+
+    # Adiciona o filtro à instância global do Jinja2
+    app.jinja_env.filters['get_attr'] = get_attr
+    # ---------------------------------------
 
     from app.routes import main as main_blueprint
     app.register_blueprint(main_blueprint)

@@ -272,57 +272,42 @@
               <div class="collapse" id="tarefas-{{ assunto.id }}">
                 <ul class="list-group mb-3">
                   {% for tarefa in assuntos_tarefas_visiveis[assunto.id] if not tarefa.is_completed %}
-                    <li class="list-group-item">
-                      <!-- Primeira linha: Botões principais -->
-                      <div class="d-flex justify-content-between align-items-center mb-1">
-                        <div class="flex-grow-1">
-                          <strong>{{ tarefa.nome_tarefa }}</strong>
-                          {% if tarefa.descricao %}
-                            <em>({{ tarefa.descricao }})</em>
-                          {% endif %}
-                        </div>
-                        <div class="d-flex gap-1">
-                          <!-- Botão Concluir -->
-                          <form action="{{ url_for('main.toggle_status_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-success" title="Concluir">
-                              <i class="fa-solid fa-check"></i>
-                            </button>
-                          </form>
-                          <!-- Botão Editar -->
-                          <a href="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="btn btn-sm btn-warning" title="Editar">
-                            <i class="fa-solid fa-pen-to-square"></i>
-                          </a>
-                          <!-- Botão Excluir -->
-                          <form action="{{ url_for('main.delete_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
-                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
-                              <i class="fa-solid fa-trash"></i>
-                            </button>
-                          </form>
-                        </div>
+                  <li class="list-group-item">
+                    <!-- Primeira linha: Botões principais -->
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <div class="flex-grow-1">
+                        <strong>{{ tarefa.nome_tarefa }}</strong>
+                        {% if tarefa.descricao %}
+                          <em>({{ tarefa.descricao }})</em>
+                        {% endif %}
                       </div>
-                      <!-- Segunda linha: Botão Compartilhar (dropdown) + Botão Adicionar Horas, alinhados à direita -->
-                      <div class="d-flex justify-content-end align-items-center gap-2 mt-2">
-                        <!-- Dropdown estilo "Assunto" para Tarefa -->
-                        <div class="dropdown">
-                          <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fa-solid fa-share-nodes"></i>
-                            {{ tarefa.user.nickname }}{% for usuario in tarefa.shared_with %} / {{ usuario.nickname }}{% endfor %}
+                      <div class="d-flex gap-1">
+                        <!-- Botão Concluir -->
+                        <form action="{{ url_for('main.toggle_status_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                            <i class="fa-solid fa-check"></i>
                           </button>
-                          <ul class="dropdown-menu dropdown-menu-end">
-                            <li>
-                              <a class="dropdown-item" href="{{ url_for('main.share_tarefa', tarefa_id=tarefa.id) }}">
-                                <i class="fa-solid fa-share-nodes"></i> Compartilhar
-                              </a>
-                            </li>
-                          </ul>
-                        </div>
-                        <!-- Botão Adicionar Horas -->
-                        <button class="btn btn-sm btn-outline-secondary add-hours-tarefa"
-                                data-tarefa-id="{{ tarefa.id }}" title="Adicionar Horas">
-                          <i class="fa-solid fa-clock"></i> {{ tarefa.horas|default(0) }}h
-                        </button>
+                        </form>
+                        <!-- Botão Editar -->
+                        <a href="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                        </a>
+                        <!-- Botão Excluir -->
+                        <form action="{{ url_for('main.delete_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                            <i class="fa-solid fa-trash"></i>
+                          </button>
+                        </form>
                       </div>
-                    </li>
+                    </div>
+                    <!-- Segunda linha: Apenas o Botão Adicionar Horas -->
+                    <div class="d-flex justify-content-end align-items-center gap-2 mt-2">
+                      <button class="btn btn-sm btn-outline-secondary add-hours-tarefa"
+                              data-tarefa-id="{{ tarefa.id }}" title="Adicionar Horas">
+                        <i class="fa-solid fa-clock"></i> {{ tarefa.horas|default(0) }}h
+                      </button>
+                    </div>
+                  </li>                  
                   {% else %}
                     <li class="list-group-item text-muted">Nenhuma tarefa pendente.</li>
                   {% endfor %}

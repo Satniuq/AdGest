@@ -1,0 +1,18 @@
+Para gravar novas alterações nos arquivos do projeto:
+
+
+#Use git add . para marcar as mudanças.
+
+git add .
+
+#Faça um commit com git commit -m "Mensagem do commit"
+
+git commit -m "Mensagem do commit"
+
+#E envie as alterações com git push.
+
+git push
+
+#para gravar mudanças feitas no git hub , no pc, fazer
+
+git pull
