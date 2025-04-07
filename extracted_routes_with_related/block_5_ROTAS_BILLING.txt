@@ -1,0 +1,553 @@
+==== BLOCO DE ROTAS EXTRAÍDO ====
+Arquivo: app/routes.py
+Bloco: ROTAS BILLING (Linhas 1142 a 1390)
+================================================================================
+
+#Rotas para Billing
+
+@main.route('/billing', methods=['GET', 'POST'])
+@login_required
+def billing():
+    if request.method == "POST":
+        selected_items = request.form.getlist('items')
+        if not selected_items:
+            flash("Nenhum item selecionado.", "warning")
+            return redirect(url_for('main.billing'))
+        
+        # Agrupar os itens selecionados por cliente
+        client_groups = {}
+        for sel in selected_items:
+            t, id_str = sel.split('-')
+            item_id = int(id_str)
+            if t == 'assunto':
+                item = Assunto.query.get(item_id)
+                client_id = item.client_id
+                group = client_groups.setdefault(client_id, {"subjects": set(), "tasks": set(), "prazos": set()})
+                group["subjects"].add(item_id)
+            elif t == 'tarefa':
+                item = Tarefa.query.get(item_id)
+                client_id = item.assunto.client_id
+                group = client_groups.setdefault(client_id, {"subjects": set(), "tasks": set(), "prazos": set()})
+                group["tasks"].add(item_id)
+            elif t == 'prazo':
+                item = PrazoJudicial.query.get(item_id)
+                client_id = item.client_id
+                group = client_groups.setdefault(client_id, {"subjects": set(), "tasks": set(), "prazos": set()})
+                group["prazos"].add(item_id)
+            else:
+                flash("Tipo de item inválido.", "danger")
+                return redirect(url_for('main.billing'))
+        
+        for client_id, items in client_groups.items():
+            total_hours = 0
+            details_lines = []
+            # Processar Assuntos selecionados – incluir todas as tarefas deste assunto
+            for subj_id in items["subjects"]:
+                subj = Assunto.query.get(subj_id)
+                subj.is_billed = True
+                details_lines.append(f"Assunto: {subj.nome_assunto}")
+                registros_assunto = HoraAdicao.query.filter_by(item_type='assunto', item_id=subj.id).all()
+                for reg in registros_assunto:
+                    user = User.query.get(reg.user_id)
+                    details_lines.append(
+                        f"  [Assunto] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                    )
+                for task in subj.tarefas:
+                    if task.is_completed and not task.is_billed:
+                        task.is_billed = True
+                        total_hours += task.horas
+                        completion_date = task.data_conclusao.strftime('%d/%m/%Y') if task.data_conclusao else "N/A"
+                        registros_tarefa = HoraAdicao.query.filter_by(item_type='tarefa', item_id=task.id).all()
+                        detalhe_tarefa = f"  Tarefa: {task.nome_tarefa}, Horas: {task.horas}h, Concluída em: {completion_date}"
+                        for reg in registros_tarefa:
+                            user = User.query.get(reg.user_id)
+                            detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                        details_lines.append(detalhe_tarefa)
+            
+            # Processar Tarefas selecionadas individualmente (evitando duplicidade)
+            for task_id in items["tasks"]:
+                task = Tarefa.query.get(task_id)
+                if task.assunto.id in items["subjects"]:
+                    continue
+                if task.is_completed and not task.is_billed:
+                    task.is_billed = True
+                    total_hours += task.horas
+                    completion_date = task.data_conclusao.strftime('%d/%m/%Y') if task.data_conclusao else "N/A"
+                    registros_tarefa = HoraAdicao.query.filter_by(item_type='tarefa', item_id=task.id).all()
+                    detalhe_tarefa = f"Tarefa: {task.nome_tarefa}, Horas: {task.horas}h, Concluída em: {completion_date}"
+                    for reg in registros_tarefa:
+                        user = User.query.get(reg.user_id)
+                        detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                    details_lines.append(detalhe_tarefa)
+            
+            # Processar Prazos selecionados
+            for prazo_id in items["prazos"]:
+                prazo = PrazoJudicial.query.get(prazo_id)
+                prazo.is_billed = True
+                total_hours += prazo.horas
+                data_conclusao = prazo.data_conclusao.strftime('%d/%m/%Y') if prazo.data_conclusao else "N/A"
+                detalhe_prazo = f"Prazo: {prazo.assunto} (Processo: {prazo.processo}), Horas: {prazo.horas}h, Concluído em: {data_conclusao}"
+                registros_prazo = HoraAdicao.query.filter_by(item_type='prazo', item_id=prazo.id).all()
+                for reg in registros_prazo:
+                    user = User.query.get(reg.user_id)
+                    detalhe_prazo += f"\n     [Prazo] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                details_lines.append(detalhe_prazo)
+            
+            nota = NotaHonorarios(
+                user_id=current_user.id,
+                client_id=client_id,
+                total_hours=total_hours,
+                details="\n".join(details_lines),
+                is_confirmed=True
+            )
+            db.session.add(nota)
+        db.session.commit()
+        flash("Notas de honorários geradas com sucesso!", "success")
+        return redirect(url_for('main.billing'))
+    else:
+        # GET: incluir todos os itens (próximos de faturamento), sejam do usuário ou compartilhados
+        billable_assuntos = Assunto.query.filter(
+            Assunto.is_completed == True,
+            Assunto.is_billed == False,
+            or_(
+                Assunto.user_id == current_user.id,
+                Assunto.shared_with.any(id=current_user.id),
+                Assunto.completed_by == current_user.id
+            )
+        ).all()
+        grouped_data = {}
+        for a in billable_assuntos:
+            c_id = a.client_id
+            if c_id not in grouped_data:
+                grouped_data[c_id] = {"client": a.client, "assuntos": {}, "prazos": []}
+            # Inclua todas as tarefas concluídas do assunto
+            tasks = Tarefa.query.filter(
+                Tarefa.assunto_id == a.id,
+                Tarefa.is_completed == True,
+                Tarefa.is_billed == False
+            ).all()
+            grouped_data[c_id]["assuntos"][a.id] = {"assunto": a, "tarefas": tasks}
+        
+         # Adicionar tarefas concluídas que não foram incluídas no agrupamento por assunto       
+        billable_tarefas = Tarefa.query.filter(
+            Tarefa.is_completed == True,
+            Tarefa.is_billed == False,
+        ).all()
+        for t in billable_tarefas:
+            subj_id = t.assunto.id
+            c_id = t.assunto.client_id
+            # Se o assunto não estiver no agrupamento ou se a tarefa não estiver listada, adicione-a
+            if c_id not in grouped_data:
+                grouped_data[c_id] = {"client": t.assunto.client, "assuntos": {}, "prazos": []}
+            if subj_id not in grouped_data[c_id]["assuntos"]:
+                grouped_data[c_id]["assuntos"][subj_id] = {"assunto": t.assunto, "tarefas": []}
+            # Verifique se a tarefa já não está listada (evita duplicidade)
+            if t not in grouped_data[c_id]["assuntos"][subj_id]["tarefas"]:
+                grouped_data[c_id]["assuntos"][subj_id]["tarefas"].append(t)
+
+
+        billable_prazos = PrazoJudicial.query.filter(
+            PrazoJudicial.status == True,
+            PrazoJudicial.is_billed == False,
+            or_(
+                PrazoJudicial.user_id == current_user.id,
+                PrazoJudicial.shared_with.any(id=current_user.id),
+                PrazoJudicial.completed_by == current_user.id
+            )
+        ).all()
+        for p in billable_prazos:
+            c_id = p.client_id
+            if c_id not in grouped_data:
+                grouped_data[c_id] = {"client": p.client, "assuntos": {}, "prazos": []}
+            grouped_data[c_id]["prazos"].append(p)
+        
+        # Mostrar apenas as notas emitidas pelo usuário atual
+        nota_honorarios = NotaHonorarios.query.filter_by(user_id=current_user.id).order_by(NotaHonorarios.created_at.desc()).all()
+        return render_template('billing_grouped.html', grouped_data=grouped_data, nota_honorarios=nota_honorarios)
+
+
+@main.route('/billing/historico')
+@login_required
+def billing_historico():
+    page = request.args.get('page', 1, type=int)
+    query = NotaHonorarios.query.filter(
+        or_(
+            NotaHonorarios.user_id == current_user.id,
+            NotaHonorarios.client.has(Client.user_id == current_user.id),
+            NotaHonorarios.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
+        )
+    )
+    # Filtros
+    cliente = request.args.get('cliente', '').strip()
+    if cliente:
+        query = query.join(NotaHonorarios.client).filter(Client.name.ilike(f"%{cliente}%"))
+    data_emissao = request.args.get('data_emissao', '').strip()
+    if data_emissao:
+        try:
+            from datetime import datetime
+            dt = datetime.strptime(data_emissao, '%Y-%m-%d')
+            query = query.filter(NotaHonorarios.created_at >= dt)
+        except ValueError:
+            pass
+    min_horas = request.args.get('min_horas', '').strip()
+    if min_horas:
+        try:
+            min_horas = float(min_horas)
+            query = query.filter(NotaHonorarios.total_hours >= min_horas)
+        except ValueError:
+            pass
+
+    query = query.order_by(NotaHonorarios.created_at.desc())
+    pagination = query.paginate(page=page, per_page=5)
+    return render_template('billing_historico.html', nota_honorarios=pagination.items, pagination=pagination)
+
+
+@main.route('/billing_cliente/<int:client_id>')
+@login_required
+def billing_cliente(client_id):
+    client = Client.query.get_or_404(client_id)
+    billing_notes = NotaHonorarios.query.filter(
+        NotaHonorarios.client_id == client_id,
+        or_(
+            NotaHonorarios.user_id == current_user.id,
+            NotaHonorarios.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
+        )
+    ).order_by(NotaHonorarios.created_at.desc()).all()
+    return render_template('billing_cliente.html', client=client, billing_notes=billing_notes)
+
+@main.route('/billing/revert/<string:item_type>/<int:item_id>', methods=['POST'])
+@login_required
+def revert_billing(item_type, item_id):
+    if item_type == 'assunto':
+        item = Assunto.query.get_or_404(item_id)
+    elif item_type == 'tarefa':
+        item = Tarefa.query.get_or_404(item_id)
+    elif item_type == 'prazo':
+        item = PrazoJudicial.query.get_or_404(item_id)
+    else:
+        flash("Tipo de item inválido.", "danger")
+        return redirect(url_for('main.billing'))
+    
+    # Permitir reverter se o item for do usuário ou, para compartilhados, se concluído pelo usuário
+    if item.user_id != current_user.id and not (hasattr(item, 'completed_by') and item.completed_by == current_user.id):
+        flash("Você não tem permissão para reverter o faturamento deste item.", "danger")
+        return redirect(url_for('main.billing'))
+    
+    if item_type == 'prazo':
+        # Para prazos, apenas reverte o faturamento e, se necessário, o status
+        item.is_billed = False
+        item.status = False  # Reverte o status (se estiver como True, indica concluído)
+        # Se desejar, pode também limpar data_conclusao e completed_by (caso esses campos sejam usados para prazos)
+        item.data_conclusao = None
+        item.completed_by = None
+    else:
+        # Para assuntos e tarefas, reverte os atributos de conclusão e faturamento
+        item.is_billed = False
+        item.is_completed = False
+        item.data_conclusao = None
+        item.completed_by = None
+
+    db.session.commit()
+    flash("Item revertido para 'não concluído' e enviado para o billing.", "success")
+    return redirect(url_for('main.billing'))
+
+================================================================================
+
+==== ARQUIVOS RELACIONADOS ====
+
+-- Arquivo: app/templates\billing_cliente.html --
+{% extends "base.html" %}
+{% block title %}Notas Emitidas - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Notas de Honorários Emitidas para {{ client.name }}</h2>
+  {% if billing_notes %}
+    <div id="clientBillingCarousel" class="carousel slide" data-bs-interval="false">
+      <div class="carousel-inner">
+        {% for note in billing_notes %}
+          <div class="carousel-item {% if loop.first %}active{% endif %}">
+            <div class="card">
+              <div class="card-header">
+                Nota #{{ note.id }}
+              </div>
+              <div class="card-body">
+                <p><strong>Data de Emissão:</strong> {{ note.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p><strong>Total de Horas:</strong> {{ note.total_hours }}h</p>
+                <pre style="white-space: pre-wrap;">{{ note.details }}</pre>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button class="carousel-control-prev" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Anterior</span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Próximo</span>
+      </button>
+    </div>
+  {% else %}
+    <p>Nenhuma nota emitida para este cliente.</p>
+  {% endif %}
+  <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary mt-3">Voltar à lista de clientes</a>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\billing_grouped.html --
+{% extends "base.html" %}
+{% block title %}Notas de Honorários{% endblock %}
+{% block content %}
+<div class="text-center mb-4">
+  <h2>Notas de Honorários</h2>
+</div>
+<div class="row">
+  <!-- Coluna dos Itens a Processar -->
+  <div class="col-md-6">
+    <h3>Por Processar</h3>
+    <form method="POST" id="billingForm">
+      {% for client_id, group in grouped_data.items() %}
+        <div class="mb-3">
+          <h4>Cliente: {{ group.client.name }}</h4>
+          {# Exibe os assuntos e suas tarefas #}
+          {% for assunto_id, a_data in group.assuntos.items() %}
+            <div class="ms-3 mb-2">
+              <label class="{% if a_data.assunto.shared_with.count() > 0 %}shared-item{% endif %}">
+                <input type="checkbox" name="items" value="assunto-{{ a_data.assunto.id }}" class="subject-checkbox">
+                <strong>Assunto:</strong> {{ a_data.assunto.nome_assunto }} - Total Horas (tarefas): {{ a_data.tarefas|map(attribute='horas')|sum }}h
+              </label>
+              <!-- Link para reverter faturamento do assunto -->
+              <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('assunto', {{ a_data.assunto.id }}); return false;">Reverter</a>
+              {% if a_data.tarefas %}
+                <ul>
+                  {% for tarefa in a_data.tarefas %}
+                    <li>
+                      <label class="{% if a_data.assunto.shared_with.count() > 0 %}shared-item{% endif %}">
+                        <input type="checkbox" name="items" value="tarefa-{{ tarefa.id }}" data-subject-id="{{ a_data.assunto.id }}">
+                        <strong>Tarefa:</strong> {{ tarefa.nome_tarefa }},
+                        Horas: {{ tarefa.horas }}h,
+                        Concluída em: {% if tarefa.data_conclusao %}{{ tarefa.data_conclusao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %}
+                      </label>
+                      <!-- Link para reverter faturamento da tarefa -->
+                      <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('tarefa', {{ tarefa.id }}); return false;">Reverter</a>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </div>
+          {% endfor %}
+          {# Exibe os prazos do cliente #}
+          {% if group.prazos %}
+            <div class="ms-3 mb-2">
+              <strong>Prazos:</strong>
+              <ul>
+                {% for prazo in group.prazos %}
+                  <li>
+                    <label class="{% if prazo.shared_with.count() > 0 %}shared-item{% endif %}">
+                      <input type="checkbox" name="items" value="prazo-{{ prazo.id }}">
+                      <strong>{{ prazo.assunto }}</strong> – Processo: {{ prazo.processo }}, Horas: {{ prazo.horas }}h,
+                      Data: {% if prazo.prazo %}{{ prazo.prazo.strftime('%d/%m/%Y') }}{% else %}Sem data{% endif %}
+                    </label>
+                    <!-- Link para reverter faturamento do prazo -->
+                    <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('prazo', {{ prazo.id }}); return false;">Reverter</a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="btn btn-primary">Gerar Nota de Honorários</button>
+    </form>
+  </div>
+  
+  <!-- Coluna do Histórico de Notas -->
+  <div class="col-md-6">
+    <h3>Notas Emitidas</h3>
+    {% if nota_honorarios and nota_honorarios|length > 0 %}
+      <div id="billingCarousel" class="carousel slide" data-bs-interval="false">
+        <div class="carousel-inner">
+          {% for nota in nota_honorarios %}
+            <div class="carousel-item {% if loop.first %}active{% endif %}">
+              <div class="card">
+                <div class="card-header">
+                  Nota #{{ nota.id }} – {{ nota.client.name }}
+                </div>
+                <div class="card-body">
+                  <p><strong>Data:</strong> {{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                  <p><strong>Total de Horas:</strong> {{ nota.total_hours }}h</p>
+                  <pre style="white-space: pre-wrap;">{{ nota.details }}</pre>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#billingCarousel" data-bs-slide="prev">
+          <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Anterior</span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#billingCarousel" data-bs-slide="next">
+          <span class="carousel-control-next-icon" aria-hidden="true"></span>
+          <span class="visually-hidden">Próximo</span>
+        </button>
+      </div>
+    {% else %}
+      <p>Nenhuma nota emitida ainda.</p>
+    {% endif %}
+    <div class="mt-3">
+      <a href="{{ url_for('main.billing_historico') }}" class="btn btn-secondary">Ver Histórico de Notas</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Gera a URL de base para reverter, usando um valor dummy para item_id e um placeholder para item_type
+  var revertBillingUrlTemplate = "{{ url_for('main.revert_billing', item_type='__ITEM_TYPE__', item_id=9999999) }}";
+  // Gera a URL para o billing, para redirecionamento após a operação
+  var billingUrl = "{{ url_for('main.billing') }}";
+  
+  // Script de seleção automática de tarefas relacionadas ao marcar um assunto
+  document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.subject-checkbox').forEach(function(subjectCheckbox) {
+          subjectCheckbox.addEventListener('change', function() {
+              var subjectId = this.value.split('-')[1];
+              document.querySelectorAll('input[type="checkbox"][name="items"][data-subject-id="' + subjectId + '"]').forEach(function(taskCheckbox) {
+                  taskCheckbox.checked = subjectCheckbox.checked;
+              });
+          });
+      });
+  });
+  
+  // Função para reverter um item via fetch (sem CSRF header)
+  function revertItem(itemType, itemId) {
+      // Substitui os placeholders na URL com os valores reais
+      var url = revertBillingUrlTemplate.replace("__ITEM_TYPE__", itemType).replace("9999999", itemId);
+      fetch(url, { method: "POST" })
+          .then(function(response) {
+              if(response.ok) {
+                  window.location.href = billingUrl;
+              } else {
+                  alert("Erro ao reverter o faturamento.");
+              }
+          })
+          .catch(function(error) {
+              alert("Erro ao reverter o faturamento.");
+          });
+  }
+  </script>
+  
+{% endblock %}
+
+  
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\billing_historico.html --
+{% extends "base.html" %}
+{% block title %}Histórico de Notas{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Histórico de Notas de Honorários</h2>
+
+  <!-- Formulário de Filtros -->
+  <form method="GET" action="{{ url_for('main.billing_historico') }}" class="mb-4">
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label for="cliente" class="form-label">Cliente</label>
+        <input type="text" class="form-control" id="cliente" name="cliente" value="{{ request.args.get('cliente', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label for="data_emissao" class="form-label">Data de Emissão</label>
+        <input type="date" class="form-control" id="data_emissao" name="data_emissao" value="{{ request.args.get('data_emissao', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label for="min_horas" class="form-label">Horas Mínimas</label>
+        <input type="number" step="0.1" class="form-control" id="min_horas" name="min_horas" value="{{ request.args.get('min_horas', '') }}">
+      </div>
+      <div class="col-md-3">
+        <label for="processo" class="form-label">Número do Processo</label>
+        <input type="text" class="form-control" id="processo" name="processo" value="{{ request.args.get('processo', '') }}">
+      </div>
+    </div>
+    <div class="row mt-3">
+      <div class="col">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+        <a href="{{ url_for('main.billing_historico') }}" class="btn btn-secondary">Limpar Filtros</a>
+      </div>
+    </div>
+  </form>
+
+  <!-- Exibição das Notas -->
+  {% if nota_honorarios %}
+    <div class="list-group">
+      {% for nota in nota_honorarios %}
+        <div class="list-group-item">
+          <h5>Nota #{{ loop.index }} – Cliente: {{ nota.client.name }}</h5>
+          <p><strong>Data:</strong> {{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+          <p><strong>Total de Horas:</strong> {{ nota.total_hours }}h</p>
+          <pre>{{ nota.details }}</pre>
+        </div>
+      {% endfor %}
+    </div>
+    {% set args = request.args.to_dict() %}
+    {% set _ = args.pop('page', None) %}
+    <nav aria-label="Page navigation" class="mt-4">
+      <ul class="pagination justify-content-center">
+        {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.billing_historico', page=pagination.prev_num, **args) }}">Anterior</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        {% for page in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+          {% if page %}
+            {% if page == pagination.page %}
+              <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+            {% else %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('main.billing_historico', page=page, **args) }}">{{ page }}</a></li>
+            {% endif %}
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.billing_historico', page=pagination.next_num, **args) }}">Próximo</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Próximo</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% else %}
+    <p>Nenhuma nota emitida.</p>
+  {% endif %}
+  <div class="mt-3">
+    <a href="{{ url_for('main.billing') }}" class="btn btn-secondary">Voltar ao Billing</a>
+  </div>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/models.py --
+class NotaHonorarios(db.Model):
+    __tablename__ = 'nota_honorarios'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    details = db.Column(db.Text)  # Lista de itens faturados (por exemplo, "Tarefa 5, Prazo 3")
+    total_hours = db.Column(db.Float, default=0.0)
+    is_confirmed = db.Column(db.Boolean, default=False)  # Pode ser usado para indicar se a nota já foi finalizada
+
+    client = db.relationship('Client', backref='nota_honorarios')
+    
+    def __repr__(self):
+        return f'<NotaHonorarios {self.id} - Client: {self.client.name}>'
+
+--------------------------------------------------------------------------------
+

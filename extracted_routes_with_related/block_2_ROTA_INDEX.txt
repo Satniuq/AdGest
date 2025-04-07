@@ -1,0 +1,15 @@
+==== BLOCO DE ROTAS EXTRAÍDO ====
+Arquivo: app/routes.py
+Bloco: ROTA INDEX (Linhas 96 a 103)
+================================================================================
+
+### PAGINA PRINCIPAL – EXIBE SO NOME DO PROGRAMA E INFOS EMPRESA DEPOIS
+@main.route('/')
+@login_required
+def index():
+    # Exibe somente o nome do programa
+    return render_template('index.html')
+
+================================================================================
+
+Nenhum arquivo relacionado encontrado.

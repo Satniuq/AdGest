@@ -4,7 +4,8 @@ from . import db
 from flask_login import UserMixin
 from datetime import datetime, date
 
-# Tabela de associação para assuntos, tarefas, prazos e clientes
+#BEGIN MODEL TABELA ASSOCIAÇÃO ASSUNTOS, PRAZOS E CLIENTES
+# Tabela de associação para assuntos, prazos e clientes
 shared_assuntos = db.Table('shared_assuntos',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
     db.Column('assunto_id', db.Integer, db.ForeignKey('assuntos.id'))
@@ -19,15 +20,9 @@ shared_clients = db.Table('shared_clients',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
     db.Column('client_id', db.Integer, db.ForeignKey('clients.id'))
 )
+#END MODEL TABELA ASSOCIAÇÃO ASSUNTOS, PRAZOS E CLIENTES
 
-#retirei a possibilidade de partilhar tarefas
-
-#shared_tarefas = db.Table('shared_tarefas',
-#    db.Column('user_id', db.Integer, db.ForeignKey('users.id', name='fk_shared_tarefas_user_id', ondelete="CASCADE")),
-#    db.Column('tarefa_id', db.Integer, db.ForeignKey('tarefas.id', name='fk_shared_tarefas_tarefa_id', ondelete="CASCADE"))
-#)
-
-
+#BEGIN MODEL USER
 # Usuário
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -55,6 +50,9 @@ class User(UserMixin, db.Model):
     def __repr__(self):
         return f'<User {self.username}>'
 
+#END MODEL USER
+
+#BEGIN MODEL AUDITORIA
 # Log de Auditoria
 class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
@@ -66,7 +64,9 @@ class AuditLog(db.Model):
     
     def __repr__(self):
         return f'<AuditLog {self.action} by {self.user_id} at {self.timestamp}>'
+#END MODEL AUDITORIA
 
+#BEGIN MODEL ASSUNTO
 class Assunto(db.Model):
     __tablename__ = 'assuntos'
     id = db.Column(db.Integer, primary_key=True)
@@ -94,7 +94,9 @@ class Assunto(db.Model):
 
     def __repr__(self):
         return f'<Assunto {self.client.name} - {self.nome_assunto}>'
+#END MODEL ASSUNTO
 
+#BEGIN MODEL TAREFA
 class Tarefa(db.Model):
     __tablename__ = 'tarefas'
     id = db.Column(db.Integer, primary_key=True)
@@ -115,6 +117,9 @@ class Tarefa(db.Model):
     def __repr__(self):
         return f'<Tarefa {self.nome_tarefa} (Assunto: {self.assunto.nome_assunto if self.assunto else "N/A"})>'
 
+#END MODEL TAREFA
+
+#BEGIN MODEL PRAZO
 class PrazoJudicial(db.Model):
     __tablename__ = 'prazos_judiciais'
     id = db.Column(db.Integer, primary_key=True)
@@ -143,8 +148,9 @@ class PrazoJudicial(db.Model):
 
     def __repr__(self):
         return f'<PrazoJudicial {self.client.name} - {self.assunto}>'
+#END MODEL PRAZO
 
-
+#BEGIN MODEL HOUR ENTRY - TAREFAS, PRAZOS
 # Hour Entry
 class HourEntry(db.Model):
     __tablename__ = 'hour_entries'
@@ -156,9 +162,9 @@ class HourEntry(db.Model):
     
     def __repr__(self):
         return f'<HourEntry {self.object_type}:{self.object_id} - {self.hours}h em {self.entry_date}>'
+#END MODEL HOUR ENTRY - TAREFAS, PRAZOS
 
-# Cliente
-
+#BEGIN MODEL CLIENTE
 class Client(db.Model):
     __tablename__ = 'clients'
     id = db.Column(db.Integer, primary_key=True)
@@ -181,7 +187,9 @@ class Client(db.Model):
     
     def __repr__(self):
         return f'<Client {self.name}>'
+#END MODEL CLIENTE
 
+#BEGIN MODEL SHARE CLIENTE
 #  modelo de associação de partilha de clientes
 class ClientShare(db.Model):
     __tablename__ = 'client_shares'
@@ -191,8 +199,9 @@ class ClientShare(db.Model):
 
     def __repr__(self):
         return f'<ClientShare client_id:{self.client_id} user_id:{self.user_id} option:{self.option}>'
+#END MODEL SHARE CLIENTE
 
-
+#BEGIN MODEL NOTA DE HONORÁRIOS
 class NotaHonorarios(db.Model):
     __tablename__ = 'nota_honorarios'
     id = db.Column(db.Integer, primary_key=True)
@@ -207,7 +216,9 @@ class NotaHonorarios(db.Model):
     
     def __repr__(self):
         return f'<NotaHonorarios {self.id} - Client: {self.client.name}>'
+#END MODEL NOTA DE HONORÁRIOS
 
+#BEGIN MODEL DOCUMENTO CONTABILIDADE
 class DocumentoContabilistico(db.Model):
     __tablename__ = 'documentos_contabilisticos'
     id = db.Column(db.Integer, primary_key=True)
@@ -245,7 +256,9 @@ class DocumentoContabilistico(db.Model):
     
     def __repr__(self):
         return f'<DocumentoContabilistico {self.id} - {self.tipo} - Client: {self.client.name}>'
+#END MODEL DOCUMENTO CONTABILIDADE
 
+#BEGIN MODEL HORA ADIÇÃO TAREFA, PRAZOS
 class HoraAdicao(db.Model):
     __tablename__ = 'horas_adicao'
     id = db.Column(db.Integer, primary_key=True)
@@ -254,10 +267,9 @@ class HoraAdicao(db.Model):
     horas_adicionadas = db.Column(db.Float, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+#END MODEL HORA ADIÇÃO TAREFA, PRAZOS
 
-from datetime import datetime
-from app import db
-
+#BEGIN MODEL NOTIFICAÇÃO
 class Notification(db.Model):
     __tablename__ = 'notifications'
     id = db.Column(db.Integer, primary_key=True)
@@ -285,3 +297,4 @@ class Notification(db.Model):
 
     def __repr__(self):
         return f"<Notification {self.id} for User {self.user_id}: {self.type}>"
+#END MODEL NOTIFICAÇÃO

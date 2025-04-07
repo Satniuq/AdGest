@@ -1,8 +1,11 @@
+#BEGIN IMPORT
 import csv
 import unicodedata
 from io import StringIO
 import json
+#END IMPORT
 
+#BEGIN FROM
 # Bibliotecas padrão
 from datetime import datetime, date, timedelta
 # Bibliotecas de terceiros
@@ -20,17 +23,18 @@ from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         shared_prazos, HoraAdicao, DocumentoContabilistico, Notification)
 from app.decorators import admin_required
 from app.decorators import handle_db_errors
+#END FROM
 
-
-
+#BEGIN DEF
 def normalize_header(header):
     header = header.strip().lower()
     header = unicodedata.normalize('NFKD', header).encode('ASCII', 'ignore').decode('utf-8')
     return header
 
 main = Blueprint('main', __name__)
+#END DEF
 
-### ROTAS DE AUTENTICAÇÃO ###
+#BEGIN ROTAS DE AUTENTICAÇÃO
 
 @main.route('/profile')
 @login_required
@@ -87,18 +91,18 @@ def logout():
     logout_user()
     flash('Saiu do sistema.', 'info')
     return redirect(url_for('main.login'))
+#END ROTAS DE AUTENTICAÇÃO
 
+#BEGIN ROTA INDEX
 ### PAGINA PRINCIPAL – EXIBE SO NOME DO PROGRAMA E INFOS EMPRESA DEPOIS
 @main.route('/')
 @login_required
 def index():
     # Exibe somente o nome do programa
     return render_template('index.html')
+#END ROTA INDEX
 
-from datetime import date, timedelta
-
-from datetime import date, timedelta
-
+#BEGIN ROTAS ASSUNTOS, TAREFAS E PRAZOS
 @main.route('/dashboard')
 @login_required
 def dashboard():
@@ -139,6 +143,7 @@ def dashboard():
         current_date=current_date,
         tomorrow_date=tomorrow_date
     )
+
 
 ### ROTAS PARA ASSUNTOS, TAREFAS E PRAZOS (já existentes) ###
 @main.route('/assunto/create', methods=['GET', 'POST'])
@@ -679,6 +684,59 @@ def toggle_status_prazo(prazo_id):
         flash(f'Erro ao alterar status do prazo: {str(e)}', 'danger')
     return redirect(url_for('main.dashboard'))
 
+# Rotas para compartilhar assuntos e prazos
+
+@main.route('/assunto/share/<int:assunto_id>', methods=['GET', 'POST'])
+@login_required
+def share_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    if assunto.user_id != current_user.id:
+        flash("Não pode compartilhar assuntos de outros usuários.", "danger")
+        return redirect(url_for('main.dashboard'))
+    form = ShareForm(obj=assunto)
+    if form.validate_on_submit():
+        # Obtém os usuários com quem o assunto será compartilhado
+        novos_usuarios = form.shared_with.data
+        assunto.shared_with = novos_usuarios
+
+        db.session.commit()
+        flash("Assunto e todas as tarefas associadas foram compartilhados com sucesso!", "success")
+        
+        # Gera notificações para os usuários (exceto o usuário atual)
+        for user in novos_usuarios:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o assunto {assunto.nome_assunto}"
+                # Ajuste a rota do link conforme a sua aplicação (por exemplo, para ver detalhes do assunto)
+                link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "share_invite", mensagem, link)
+        
+        return redirect(url_for('main.dashboard'))
+    return render_template('share_assunto.html', form=form, assunto=assunto)
+
+
+@main.route('/prazo/share/<int:prazo_id>', methods=['GET', 'POST'])
+@login_required
+def share_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    if prazo.user_id != current_user.id:
+        flash("Não pode compartilhar prazos de outro usuário.", "danger")
+        return redirect(url_for('main.dashboard'))
+    form = ShareForm(obj=prazo)
+    if form.validate_on_submit():
+        novos_usuarios = form.shared_with.data
+        prazo.shared_with = novos_usuarios
+        db.session.commit()
+        flash("Prazo compartilhado com sucesso!", "success")
+        
+        # Gera notificações para os usuários (exceto o usuário atual)
+        for user in novos_usuarios:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+                link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "share_invite", mensagem, link)
+        
+        return redirect(url_for('main.dashboard'))
+    return render_template('share_prazo.html', form=form, prazo=prazo)
 
 ### ROTA PARA GUARDAR REORGANIZAÇÃO DOS ASSUNTOS NO DASHBOARD
 
@@ -709,7 +767,9 @@ def update_assuntos_order():
         current_app.logger.error(f"Erro ao atualizar ordem: {str(e)}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+#END ROTAS ASSUNTOS, TAREFAS E PRAZOS
 
+#BEGIN ROTAS CLIENTES
 ### ROTAS PARA CLIENTES E HISTÓRICO ###
 @main.route('/clientes')
 @login_required
@@ -732,6 +792,56 @@ def clientes():
     pagination = query.order_by(func.lower(Client.name)).paginate(page=page, per_page=10)
     clients = pagination.items
     return render_template('clientes.html', clients=clients, pagination=pagination, search=search)
+
+@main.route('/client/create', methods=['GET', 'POST'])
+@login_required
+def create_client():
+    form = ClientForm()
+    if form.validate_on_submit():
+        try:
+            new_client = Client(
+                user_id=current_user.id,
+                name=form.name.data.strip(),
+                number_interno=form.number_interno.data.strip() if form.number_interno.data else None,
+                nif=form.nif.data.strip() if form.nif.data else None,
+                address=form.address.data.strip() if form.address.data else None,
+                email=form.email.data.strip() if form.email.data else None,
+                telephone=form.telephone.data.strip() if form.telephone.data else None
+            )
+            # Se o usuário selecionar partilha, associe os usuários
+            if form.shared_with.data:
+                new_client.shared_with = form.shared_with.data
+            db.session.add(new_client)
+            db.session.commit()
+            flash("Cliente criado com sucesso!", "success")
+            return redirect(url_for('main.clientes'))
+        except IntegrityError as e:
+            db.session.rollback()
+            if "UNIQUE constraint failed: clients.name" in str(e.orig):
+                flash("O nome do cliente já está registrado. Por favor, escolha outro nome.", "danger")
+            else:
+                flash(f"Erro ao criar cliente: {str(e)}", "danger")
+            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
+            flash(f"Erro ao criar cliente: {str(e)}", "danger")
+    return render_template('create_client.html', form=form)
+
+@main.route('/cliente/delete/<int:client_id>', methods=['POST'])
+@login_required
+@admin_required  # Apenas administradores poderão excluir
+def delete_cliente(client_id):
+    client = Client.query.get_or_404(client_id)
+    try:
+        db.session.delete(client)
+        db.session.commit()
+        flash('Cliente excluído com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao excluir cliente: {str(e)}')
+        flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
+    return redirect(url_for('main.clientes'))
 
 @main.route('/upload_client_csv', methods=['GET', 'POST'])
 @login_required
@@ -1026,7 +1136,10 @@ def historico_cliente(client_id):
         tarefas_concluidas=tarefas_concluidas,
         tarefas_pendentes=tarefas_pendentes
     )
+#END ROTAS CLIENTES
 
+
+#BEGIN ROTAS BILLING
 #Rotas para Billing
 
 @main.route('/billing', methods=['GET', 'POST'])
@@ -1189,6 +1302,7 @@ def billing():
         nota_honorarios = NotaHonorarios.query.filter_by(user_id=current_user.id).order_by(NotaHonorarios.created_at.desc()).all()
         return render_template('billing_grouped.html', grouped_data=grouped_data, nota_honorarios=nota_honorarios)
 
+
 @main.route('/billing/historico')
 @login_required
 def billing_historico():
@@ -1224,7 +1338,6 @@ def billing_historico():
     pagination = query.paginate(page=page, per_page=5)
     return render_template('billing_historico.html', nota_honorarios=pagination.items, pagination=pagination)
 
-from sqlalchemy import or_
 
 @main.route('/billing_cliente/<int:client_id>')
 @login_required
@@ -1274,111 +1387,10 @@ def revert_billing(item_type, item_id):
     db.session.commit()
     flash("Item revertido para 'não concluído' e enviado para o billing.", "success")
     return redirect(url_for('main.billing'))
-
-@main.route('/client/create', methods=['GET', 'POST'])
-@login_required
-def create_client():
-    form = ClientForm()
-    if form.validate_on_submit():
-        try:
-            new_client = Client(
-                user_id=current_user.id,
-                name=form.name.data.strip(),
-                number_interno=form.number_interno.data.strip() if form.number_interno.data else None,
-                nif=form.nif.data.strip() if form.nif.data else None,
-                address=form.address.data.strip() if form.address.data else None,
-                email=form.email.data.strip() if form.email.data else None,
-                telephone=form.telephone.data.strip() if form.telephone.data else None
-            )
-            # Se o usuário selecionar partilha, associe os usuários
-            if form.shared_with.data:
-                new_client.shared_with = form.shared_with.data
-            db.session.add(new_client)
-            db.session.commit()
-            flash("Cliente criado com sucesso!", "success")
-            return redirect(url_for('main.clientes'))
-        except IntegrityError as e:
-            db.session.rollback()
-            if "UNIQUE constraint failed: clients.name" in str(e.orig):
-                flash("O nome do cliente já está registrado. Por favor, escolha outro nome.", "danger")
-            else:
-                flash(f"Erro ao criar cliente: {str(e)}", "danger")
-            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
-            flash(f"Erro ao criar cliente: {str(e)}", "danger")
-    return render_template('create_client.html', form=form)
-
-@main.route('/cliente/delete/<int:client_id>', methods=['POST'])
-@login_required
-@admin_required  # Apenas administradores poderão excluir
-def delete_cliente(client_id):
-    client = Client.query.get_or_404(client_id)
-    try:
-        db.session.delete(client)
-        db.session.commit()
-        flash('Cliente excluído com sucesso!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f'Erro ao excluir cliente: {str(e)}')
-        flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
-    return redirect(url_for('main.clientes'))
-
-# Rotas para compartilhar assuntos prazos, clientes
-
-@main.route('/assunto/share/<int:assunto_id>', methods=['GET', 'POST'])
-@login_required
-def share_assunto(assunto_id):
-    assunto = Assunto.query.get_or_404(assunto_id)
-    if assunto.user_id != current_user.id:
-        flash("Não pode compartilhar assuntos de outros usuários.", "danger")
-        return redirect(url_for('main.dashboard'))
-    form = ShareForm(obj=assunto)
-    if form.validate_on_submit():
-        # Obtém os usuários com quem o assunto será compartilhado
-        novos_usuarios = form.shared_with.data
-        assunto.shared_with = novos_usuarios
-
-        db.session.commit()
-        flash("Assunto e todas as tarefas associadas foram compartilhados com sucesso!", "success")
-        
-        # Gera notificações para os usuários (exceto o usuário atual)
-        for user in novos_usuarios:
-            if user.id != current_user.id:
-                mensagem = f"{current_user.nickname} partilhou consigo o assunto {assunto.nome_assunto}"
-                # Ajuste a rota do link conforme a sua aplicação (por exemplo, para ver detalhes do assunto)
-                link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
-                criar_notificacao(user.id, "share_invite", mensagem, link)
-        
-        return redirect(url_for('main.dashboard'))
-    return render_template('share_assunto.html', form=form, assunto=assunto)
+#END ROTAS BILLING
 
 
-@main.route('/prazo/share/<int:prazo_id>', methods=['GET', 'POST'])
-@login_required
-def share_prazo(prazo_id):
-    prazo = PrazoJudicial.query.get_or_404(prazo_id)
-    if prazo.user_id != current_user.id:
-        flash("Não pode compartilhar prazos de outro usuário.", "danger")
-        return redirect(url_for('main.dashboard'))
-    form = ShareForm(obj=prazo)
-    if form.validate_on_submit():
-        novos_usuarios = form.shared_with.data
-        prazo.shared_with = novos_usuarios
-        db.session.commit()
-        flash("Prazo compartilhado com sucesso!", "success")
-        
-        # Gera notificações para os usuários (exceto o usuário atual)
-        for user in novos_usuarios:
-            if user.id != current_user.id:
-                mensagem = f"{current_user.nickname} partilhou consigo o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
-                link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
-                criar_notificacao(user.id, "share_invite", mensagem, link)
-        
-        return redirect(url_for('main.dashboard'))
-    return render_template('share_prazo.html', form=form, prazo=prazo)
-
+#BEGIN ROTAS NOTIFICAÇÕES
 #Rotas para notificações
 
 @main.route('/notifications')
@@ -1483,8 +1495,9 @@ def respond_share(notif_id, acao):
     notif.is_read = True
     db.session.commit()
     return redirect(url_for('main.notifications'))
+#END ROTAS NOTIFICAÇÕES
 
-
+#BEGIN ROTA PRINCIPAL PARA CONTABILIDADE
 #ROTA PRINCIPAL PARA CONTABILIDADE
 @main.route('/contabilidade_cliente/<int:client_id>')
 @login_required
@@ -1497,5 +1510,5 @@ def contabilidade_cliente(client_id):
     paid_docs = [doc for doc in contabil_docs if doc.is_confirmed]
     pending_docs = [doc for doc in contabil_docs if not doc.is_confirmed]
     return render_template('accounting/contabilidade_cliente.html', client=client, paid_docs=paid_docs, pending_docs=pending_docs)
-
+#END ROTA PRINCIPAL PARA CONTABILIDADE
 

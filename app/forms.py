@@ -15,6 +15,7 @@ def user_clients_query():
     from flask_login import current_user
     return Client.query.filter_by(user_id=current_user.id)
 
+#BEGIN FORM REGISTAR
 class RegistrationForm(FlaskForm):
     username = StringField('Usuário', validators=[DataRequired(), Length(min=3, max=100)])
     nickname = StringField('Nickname', validators=[DataRequired(message="O nickname é obrigatório")])
@@ -29,12 +30,16 @@ class RegistrationForm(FlaskForm):
         ('admin', 'Admin')
     ], validators=[DataRequired()])
     submit = SubmitField('Registrar')
+#END FORM REGISTAR
 
+#BEGIN FORM LOGIN
 class LoginForm(FlaskForm):
     username = StringField('Usuário', validators=[DataRequired()])
     password = PasswordField('Senha', validators=[DataRequired()])
     submit = SubmitField('Entrar')
+#END FORM LOGIN
 
+#BEGIN FORM ASSUNTO, TAREFA, PRAZO
 class AssuntoForm(FlaskForm):
     client_existing = QuerySelectField(
         'Cliente Existente',
@@ -118,9 +123,9 @@ class PrazoJudicialForm(FlaskForm):
             self.client_new.errors.append(msg)
             return False
         return True
+#END FORM ASSUNTO, TAREFA, PRAZO
 
-# --- Novo Formulário para Clientes ---
-
+#BEGIN FORM CLIENTE
 def unique_number_interno(form, field):
     if field.data:
         # Remove espaços em branco
@@ -144,9 +149,9 @@ class ClientForm(FlaskForm):
         validators=[Optional()]
     )
     submit = SubmitField('Salvar Cliente')
+#END FORM CLIENTE
 
-#formulário para partilha
-
+#BEGIN FORM SHARE ASSUNTO, PRAZO E CLIENTE
 class ShareForm(FlaskForm):
     shared_with = QuerySelectMultipleField(
         'Compartilhar com',
@@ -155,3 +160,4 @@ class ShareForm(FlaskForm):
         validators=[Optional()]
     )
     submit = SubmitField('Atualizar Compartilhamento')
+#END FORM SHARE ASSUNTO, PRAZO E CLIENTE

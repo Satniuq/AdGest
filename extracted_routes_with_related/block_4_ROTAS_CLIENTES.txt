@@ -1,0 +1,1036 @@
+==== BLOCO DE ROTAS EXTRAÍDO ====
+Arquivo: app/routes.py
+Bloco: ROTAS CLIENTES (Linhas 772 a 1139)
+================================================================================
+
+### ROTAS PARA CLIENTES E HISTÓRICO ###
+@main.route('/clientes')
+@login_required
+def clientes():
+    page = request.args.get('page', 1, type=int)
+    search = request.args.get('q', '').strip()
+    query = Client.query.filter(
+    or_(
+        Client.user_id == current_user.id,
+        Client.shares.any(ClientShare.user_id == current_user.id)
+        )
+    )
+    if search:
+        query = query.filter(
+            or_(
+                Client.name.ilike(f'%{search}%'),
+                Client.number_interno.ilike(f'%{search}%')
+            )
+        )
+    pagination = query.order_by(func.lower(Client.name)).paginate(page=page, per_page=10)
+    clients = pagination.items
+    return render_template('clientes.html', clients=clients, pagination=pagination, search=search)
+
+@main.route('/client/create', methods=['GET', 'POST'])
+@login_required
+def create_client():
+    form = ClientForm()
+    if form.validate_on_submit():
+        try:
+            new_client = Client(
+                user_id=current_user.id,
+                name=form.name.data.strip(),
+                number_interno=form.number_interno.data.strip() if form.number_interno.data else None,
+                nif=form.nif.data.strip() if form.nif.data else None,
+                address=form.address.data.strip() if form.address.data else None,
+                email=form.email.data.strip() if form.email.data else None,
+                telephone=form.telephone.data.strip() if form.telephone.data else None
+            )
+            # Se o usuário selecionar partilha, associe os usuários
+            if form.shared_with.data:
+                new_client.shared_with = form.shared_with.data
+            db.session.add(new_client)
+            db.session.commit()
+            flash("Cliente criado com sucesso!", "success")
+            return redirect(url_for('main.clientes'))
+        except IntegrityError as e:
+            db.session.rollback()
+            if "UNIQUE constraint failed: clients.name" in str(e.orig):
+                flash("O nome do cliente já está registrado. Por favor, escolha outro nome.", "danger")
+            else:
+                flash(f"Erro ao criar cliente: {str(e)}", "danger")
+            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao criar cliente: {str(e)}')
+            flash(f"Erro ao criar cliente: {str(e)}", "danger")
+    return render_template('create_client.html', form=form)
+
+@main.route('/cliente/delete/<int:client_id>', methods=['POST'])
+@login_required
+@admin_required  # Apenas administradores poderão excluir
+def delete_cliente(client_id):
+    client = Client.query.get_or_404(client_id)
+    try:
+        db.session.delete(client)
+        db.session.commit()
+        flash('Cliente excluído com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao excluir cliente: {str(e)}')
+        flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
+    return redirect(url_for('main.clientes'))
+
+@main.route('/upload_client_csv', methods=['GET', 'POST'])
+@login_required
+def upload_client_csv():
+    # Reutilizamos o mesmo formulário de upload CSV que já usamos (UploadCSVForm)
+    from app.accounting.forms import UploadCSVForm
+    form = UploadCSVForm()
+    if form.validate_on_submit():
+        file = form.csv_file.data
+        try:
+            # Detecta o delimitador automaticamente
+            sample = file.read(1024).decode('utf-8')
+            file.seek(0)
+            dialect = csv.Sniffer().sniff(sample)
+            stream = StringIO(file.read().decode('utf-8'))
+            reader = csv.DictReader(stream, dialect=dialect)
+            registros = []
+            for row in reader:
+                normalized_row = {normalize_header(k): (v.strip() if v else v) for k, v in row.items()}
+                registros.append(normalized_row)
+            flash(f"{len(registros)} registros foram lidos com sucesso.", "success")
+            session['client_csv_registros'] = registros
+            return redirect(url_for('main.preview_client_csv'))
+        except Exception as e:
+            flash("Erro ao processar o arquivo: " + str(e), "danger")
+    return render_template('upload_client_csv.html', form=form)
+
+@main.route('/preview_client_csv', methods=['GET', 'POST'])
+@login_required
+def preview_client_csv():
+    registros = session.get('client_csv_registros', [])
+    if not registros:
+        flash("Nenhum registro para pré-visualizar. Importe um arquivo primeiro.", "warning")
+        return redirect(url_for('main.upload_client_csv'))
+
+    errors = []
+    # Verificações para cada registro
+    for idx, row in enumerate(registros, start=1):
+        # Tenta obter o nome do cliente a partir de várias possíveis chaves
+        client_name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+        if not client_name:
+            errors.append(f"Linha {idx}: Nome do cliente está vazio.")
+            continue
+
+        # Procura cliente pelo nome
+        existing_client = Client.query.filter_by(name=client_name, user_id=current_user.id).first()
+        if existing_client:
+            # Se o CSV fornece número e o cliente existente tem número diferente, alerta erro
+            if number_interno and existing_client.number_interno and existing_client.number_interno != number_interno:
+                errors.append(f"Linha {idx}: Cliente '{client_name}' já existe com número '{existing_client.number_interno}', mas o CSV informa '{number_interno}'.")
+            # Verifica o NIF: se o CSV fornece NIF e o existente tem um NIF diferente, alerta erro
+            if nif and existing_client.nif and existing_client.nif != nif:
+                errors.append(f"Linha {idx}: Cliente '{client_name}' já existe com NIF '{existing_client.nif}', mas o CSV informa '{nif}'.")
+        # Se o número interno já existir associado a outro cliente (nome diferente), alerta erro
+        if number_interno:
+            client_with_num = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+            if client_with_num and client_with_num.name.lower() != client_name.lower():
+                errors.append(f"Linha {idx}: O número interno '{number_interno}' já pertence a '{client_with_num.name}', mas o CSV indica '{client_name}'.")
+        # Verifica duplicação do NIF: se o NIF já existe associado a outro cliente com nome diferente
+        if nif:
+            client_with_nif = Client.query.filter_by(nif=nif, user_id=current_user.id).first()
+            if client_with_nif and client_with_nif.name.lower() != client_name.lower():
+                errors.append(f"Linha {idx}: O NIF '{nif}' já pertence a '{client_with_nif.name}', mas o CSV indica '{client_name}'.")
+
+    if request.method == 'POST':
+        if errors:
+            flash("Existem erros que precisam ser corrigidos antes de confirmar a importação.", "danger")
+        else:
+            # Renderiza um template intermediário de confirmação, passando os registros para revisão
+            return render_template('confirm_client_csv_import.html', registros=registros)
+    return render_template('preview_client_csv.html', registros=registros, errors=errors)
+
+@main.route('/confirm_client_csv_import', methods=['POST'])
+@login_required
+def confirm_client_csv_import():
+    registros = session.get('client_csv_registros', [])
+    if not registros:
+        flash("Não há registros na sessão para importar.", "danger")
+        return redirect(url_for('main.upload_client_csv'))
+    session.pop('client_csv_registros', None)
+    imported_count = 0
+    for row in registros:
+        # Obter nome do cliente a partir de possíveis chaves
+        name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        if not name:
+            continue
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+        address = (row.get('address') or row.get('morada') or '').strip()
+        email = (row.get('email') or '').strip()
+        telephone = (row.get('telephone') or row.get('tel') or '').strip()
+
+        # Procura o cliente pelo nome e usuário
+        client = Client.query.filter_by(name=name, user_id=current_user.id).first()
+        if not client:
+            client = Client(
+                user_id=current_user.id,
+                name=name,
+                number_interno=number_interno,
+                nif=nif,
+                address=address,
+                email=email,
+                telephone=telephone
+            )
+            db.session.add(client)
+        else:
+            # Atualiza se o campo estiver vazio
+            if number_interno and not client.number_interno:
+                client.number_interno = number_interno
+            if nif and not client.nif:
+                client.nif = nif
+            if address and not client.address:
+                client.address = address
+            if email and not client.email:
+                client.email = email
+            if telephone and not client.telephone:
+                client.telephone = telephone
+        imported_count += 1
+    try:
+        db.session.commit()
+        flash(f"{imported_count} clientes importados com sucesso!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao importar clientes: {e}", "danger")
+    return redirect(url_for('main.clientes'))
+
+@main.route('/client_info/<int:client_id>')
+@login_required
+def client_info(client_id):
+    client = Client.query.get_or_404(client_id)
+    return render_template('client_info.html', client=client)
+
+@main.route('/client/edit/<int:client_id>', methods=['GET', 'POST'])
+@login_required
+def edit_client(client_id):
+    client = Client.query.get_or_404(client_id)
+    if request.method == 'POST':
+        client.name = request.form.get('name')
+        client.number_interno = request.form.get('number_interno')
+        client.nif = request.form.get('nif')
+        client.address = request.form.get('address')
+        client.email = request.form.get('email')
+        client.telephone = request.form.get('telephone')
+        try:
+            db.session.commit()
+            flash("Cliente atualizado com sucesso!", "success")
+            return redirect(url_for('main.client_info', client_id=client.id))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao atualizar cliente: {str(e)}')
+            flash(f"Erro ao atualizar cliente: {str(e)}", "danger")
+            return redirect(url_for('main.edit_client', client_id=client.id))
+    return render_template('edit_client.html', client=client)
+
+#rotas para partilhar clientes
+
+@main.route('/share_client/<int:client_id>', methods=['GET', 'POST'])
+@login_required
+def share_client(client_id):
+    client = Client.query.get_or_404(client_id)
+    form = ShareForm()  # Já existe o seu ShareForm com o campo shared_with
+
+    # Preencha as choices do campo shared_with, se necessário:
+    # form.shared_with.query = User.query.filter(...)
+
+    if form.validate_on_submit():
+        client.shared_with = form.shared_with.data
+        db.session.commit()
+        flash("Compartilhamento atualizado com sucesso!", "success")
+        
+        #partilhar clientes
+        for user in form.shared_with.data:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o cliente {client.name}"
+                link = url_for('main.verificar_cliente_partilhado', cliente_id=client.id)
+                criar_notificacao(
+                    user.id,
+                    "share_invite",
+                    mensagem,
+                    link,
+                    extra_data={"cliente_id": int(client.id)}
+                )
+
+        return redirect(url_for('main.clientes'))
+
+    return render_template('partilhar_cliente.html', client=client, form=form)
+
+@main.route('/verificar_cliente_partilhado/<int:cliente_id>')
+@login_required
+def verificar_cliente_partilhado(cliente_id):
+    cliente_partilhado = Client.query.get_or_404(cliente_id)
+
+    # Tenta encontrar um cliente existente para o User 2
+    if cliente_partilhado.number_interno:
+        cliente_existente = Client.query.filter_by(
+            user_id=current_user.id,
+            number_interno=cliente_partilhado.number_interno
+        ).first()
+    else:
+        cliente_existente = Client.query.filter(
+            Client.user_id == current_user.id,
+            func.lower(Client.name) == cliente_partilhado.name.lower()
+        ).first()
+
+    # Marcar todas as notificações do tipo 'share_invite' relacionadas a este cliente como lidas
+    notifs = Notification.query.filter_by(
+        user_id=current_user.id,
+        type="share_invite",
+        is_read=False
+    ).all()
+    for notif in notifs:
+        # Se a notificação extra_data contiver o cliente_id igual ao que estamos verificando
+        if notif.extra.get('cliente_id') == cliente_partilhado.id:
+            notif.is_read = True
+    db.session.commit()
+
+    return render_template('verificar_cliente.html',
+                           cliente_partilhado=cliente_partilhado,
+                           cliente_existente=cliente_existente)
+
+
+@main.route('/resolver_conflitos_cliente/<int:cliente_existente_id>', methods=['POST'])
+@login_required
+def resolver_conflitos_cliente(cliente_existente_id):
+    cliente_existente = Client.query.filter_by(id=cliente_existente_id, user_id=current_user.id).first_or_404()
+    cliente_partilhado_id = request.form.get('cliente_partilhado_id')
+    cliente_partilhado = Client.query.get(cliente_partilhado_id)
+
+    # Lista de campos a resolver
+    campos = ['name', 'number_interno', 'nif', 'address', 'email', 'telephone']
+    for campo in campos:
+        choice = request.form.get(f"{campo}_choice")
+        if choice == 'user1':
+            setattr(cliente_existente, campo, getattr(cliente_partilhado, campo))
+        # Se a escolha for 'user2', mantemos o valor atual; se desejar concatenar ou outro tratamento, ajuste aqui.
+
+    db.session.commit()
+    flash("Informações do cliente atualizadas com sucesso!", "success")
+    return redirect(url_for('main.client_info', client_id=cliente_existente.id))
+
+@main.route('/criar_cliente_partilhado/<int:cliente_partilhado_id>')
+@login_required
+def criar_cliente_partilhado(cliente_partilhado_id):
+    cliente_partilhado = Client.query.get_or_404(cliente_partilhado_id)
+    # Verifica se já existe um cliente com o mesmo nome para o usuário atual
+    existente = Client.query.filter_by(user_id=current_user.id, name=cliente_partilhado.name).first()
+    if existente:
+        flash("Você já possui um cliente com esse nome. Por favor, verifique.", "warning")
+        return redirect(url_for('main.client_info', client_id=existente.id))
+    
+    # Caso contrário, cria a cópia
+    novo_cliente = Client(
+        user_id=current_user.id,
+        name=cliente_partilhado.name,
+        number_interno=cliente_partilhado.number_interno,
+        nif=cliente_partilhado.nif,
+        address=cliente_partilhado.address,
+        email=cliente_partilhado.email,
+        telephone=cliente_partilhado.telephone
+    )
+    db.session.add(novo_cliente)
+    db.session.commit()
+    flash("Novo cliente criado com os dados partilhados!", "success")
+    return redirect(url_for('main.client_info', client_id=novo_cliente.id))
+
+
+@main.route('/historico/<int:client_id>')
+@login_required
+def historico_cliente(client_id):
+    client = Client.query.get_or_404(client_id)
+    assuntos_concluidos = [assunto for assunto in client.assuntos if assunto.is_completed]
+    assuntos_pendentes = [assunto for assunto in client.assuntos if not assunto.is_completed]
+    prazos_concluidos = [prazo for prazo in client.prazos_judiciais if prazo.status]
+    prazos_pendentes = [prazo for prazo in client.prazos_judiciais if not prazo.status]
+    tarefas_concluidas = []
+    tarefas_pendentes = []
+    for assunto in client.assuntos:
+        for tarefa in assunto.tarefas:
+            if tarefa.is_completed:
+                tarefas_concluidas.append(tarefa)
+            else:
+                tarefas_pendentes.append(tarefa)
+    return render_template(
+        'historico.html',
+        client=client,
+        assuntos_concluidos=assuntos_concluidos,
+        assuntos_pendentes=assuntos_pendentes,
+        prazos_concluidos=prazos_concluidos,
+        prazos_pendentes=prazos_pendentes,
+        tarefas_concluidas=tarefas_concluidas,
+        tarefas_pendentes=tarefas_pendentes
+    )
+
+================================================================================
+
+==== ARQUIVOS RELACIONADOS ====
+
+-- Arquivo: app/templates\billing_cliente.html --
+{% extends "base.html" %}
+{% block title %}Notas Emitidas - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Notas de Honorários Emitidas para {{ client.name }}</h2>
+  {% if billing_notes %}
+    <div id="clientBillingCarousel" class="carousel slide" data-bs-interval="false">
+      <div class="carousel-inner">
+        {% for note in billing_notes %}
+          <div class="carousel-item {% if loop.first %}active{% endif %}">
+            <div class="card">
+              <div class="card-header">
+                Nota #{{ note.id }}
+              </div>
+              <div class="card-body">
+                <p><strong>Data de Emissão:</strong> {{ note.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                <p><strong>Total de Horas:</strong> {{ note.total_hours }}h</p>
+                <pre style="white-space: pre-wrap;">{{ note.details }}</pre>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button class="carousel-control-prev" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Anterior</span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Próximo</span>
+      </button>
+    </div>
+  {% else %}
+    <p>Nenhuma nota emitida para este cliente.</p>
+  {% endif %}
+  <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary mt-3">Voltar à lista de clientes</a>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\clientes.html --
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="mb-4 text-center">Lista de Clientes</h2>
+  
+  <!-- Botão Criar Cliente e CSV -->
+  <div class="text-end mb-3">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-outline-primary">Importar Clientes CSV</a>
+    <a href="{{ url_for('main.create_client') }}" class="btn btn-success">+ Criar Cliente</a>
+  </div>
+  
+  <!-- Caixa de pesquisa -->
+  <form method="GET" action="{{ url_for('main.clientes') }}" class="mb-3">
+    <input type="text" name="q" id="clientSearch" class="form-control" placeholder="Pesquisar cliente (nome ou número interno)..." value="{{ search }}">
+  </form>
+
+  <!-- Exibição dos clientes em cards -->
+  <div class="row" id="clientList">
+    {% for client in clients %}
+      <div class="col-md-4 mb-3 client-card">
+        <div class="card h-100">
+          <div class="card-body">
+            <h5 class="card-title">{{ client.name }}</h5>
+            {% if client.number_interno %}
+              <h6 class="card-subtitle mb-2 text-muted">{{ client.number_interno }}</h6>
+            {% endif %}
+            <p class="card-text">
+              {% if client.email %}Email: {{ client.email }}<br>{% endif %}
+              {% if client.telephone %}Tel: {{ client.telephone }}{% endif %}
+            </p>
+          </div>
+          <div class="card-footer d-flex justify-content-between align-items-center">
+            <div>
+              <a href="{{ url_for('main.client_info', client_id=client.id) }}" class="btn btn-primary btn-sm">Info</a>
+              <a href="{{ url_for('main.historico_cliente', client_id=client.id) }}" class="btn btn-info btn-sm">Histórico</a>
+              {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('main.billing_cliente', client_id=client.id) }}" class="btn btn-success btn-sm">Billing</a>
+                <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+              {% elif current_user.role == 'advogado' %}
+                <a href="{{ url_for('main.billing_cliente', client_id=client.id) }}" class="btn btn-success btn-sm">Billing</a>
+              {% else %}
+                <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+              {% endif %}
+            </div>
+            <div>
+              <!-- Novo Botão de Partilhar -->
+              <a href="{{ url_for('main.share_client', client_id=client.id) }}" class="btn btn-sm btn-info">Partilhar</a>
+            </div>
+          </div>                                                  
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  
+  <!-- Controles de paginação -->
+  {% if pagination.pages > 1 %}
+    <nav aria-label="Page navigation" class="mt-4">
+      <ul class="pagination justify-content-center">
+        {% if pagination.has_prev %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.clientes', page=pagination.prev_num, q=search) }}">Anterior</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+        {% for page in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+          {% if page %}
+            {% if page == pagination.page %}
+              <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+            {% else %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('main.clientes', page=page, q=search) }}">{{ page }}</a></li>
+            {% endif %}
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="{{ url_for('main.clientes', page=pagination.next_num, q=search) }}">Próximo</a>
+          </li>
+        {% else %}
+          <li class="page-item disabled"><span class="page-link">Próximo</span></li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% endif %}
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\client_info.html --
+{% extends "base.html" %}
+{% block title %}Informação do Cliente - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Informação do Cliente</h2>
+  <div class="card">
+    <div class="card-body">
+      <h4>{{ client.name }}</h4>
+      {% if client.number_interno %}
+        <p><strong>Número Interno:</strong> {{ client.number_interno }}</p>
+      {% endif %}
+      {% if client.nif %}
+        <p><strong>NIF:</strong> {{ client.nif }}</p>
+      {% endif %}
+      {% if client.address %}
+        <p><strong>Morada:</strong> {{ client.address }}</p>
+      {% endif %}
+      {% if client.email %}
+        <p><strong>Email:</strong> {{ client.email }}</p>
+      {% endif %}
+      {% if client.telephone %}
+        <p><strong>Telefone:</strong> {{ client.telephone }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="mt-3">
+    <a href="{{ url_for('main.edit_client', client_id=client.id) }}" class="btn btn-warning">Editar</a>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar</a>
+  </div>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\confirm_client_csv_import.html --
+{% extends "base.html" %}
+{% block title %}Confirmar Importação de Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2>Confirmar Importação dos Clientes</h2>
+  <p>Revise os registros abaixo e, se estiver tudo correto, confirme a importação.</p>
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        {% for col in registros[0].keys() %}
+          <th>{{ col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+        <tr>
+          {% for col in row.keys() %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="POST" action="{{ url_for('main.confirm_client_csv_import') }}">
+    {{ form.hidden_tag() if form is defined }}
+    <button type="submit" class="btn btn-success">Confirmar Importação</button>
+  </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\create_client.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Criar Cliente{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Criar Novo Cliente</h2>
+  <form method="POST" class="needs-validation" novalidate>
+    {{ form.hidden_tag() }}
+    {{ macros.render_field(form.name) }}
+    {{ macros.render_field(form.number_interno) }}
+    {{ macros.render_field(form.nif) }}
+    {{ macros.render_field(form.address) }}
+    {{ macros.render_field(form.email) }}
+    {{ macros.render_field(form.telephone) }}
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar</a>
+  </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\edit_client.html --
+{% extends "base.html" %}
+{% block title %}Editar Cliente - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Editar Cliente</h2>
+  <form method="POST">
+    <div class="mb-3">
+      <label for="name" class="form-label">Nome do Cliente</label>
+      <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>
+    </div>
+    <div class="mb-3">
+      <label for="number_interno" class="form-label">Número Interno</label>
+      <input type="text" class="form-control" id="number_interno" name="number_interno" value="{{ client.number_interno }}">
+    </div>
+    <div class="mb-3">
+      <label for="nif" class="form-label">NIF</label>
+      <input type="text" class="form-control" id="nif" name="nif" value="{{ client.nif }}">
+    </div>
+    <div class="mb-3">
+      <label for="address" class="form-label">Morada</label>
+      <input type="text" class="form-control" id="address" name="address" value="{{ client.address }}">
+    </div>
+    <div class="mb-3">
+      <label for="email" class="form-label">Email</label>
+      <input type="email" class="form-control" id="email" name="email" value="{{ client.email }}">
+    </div>
+    <div class="mb-3">
+      <label for="telephone" class="form-label">Telefone</label>
+      <input type="text" class="form-control" id="telephone" name="telephone" value="{{ client.telephone }}">
+    </div>
+    <button type="submit" class="btn btn-primary">Salvar</button>
+    <a href="{{ url_for('main.client_info', client_id=client.id) }}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\partilhar_cliente.html --
+{% extends "base.html" %}
+{% block title %}Compartilhar Cliente{% endblock %}
+{% block content %}
+  <h2>Compartilhar Cliente: {{ client.name }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-link">Cancelar</a>
+  </form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\preview_client_csv.html --
+{% extends "base.html" %}
+{% block title %}Pré-visualização Clientes CSV{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Pré-visualização dos Clientes Importados</h2>
+  
+  {% if errors %}
+    <div class="alert alert-danger">
+      <h4>Erros encontrados:</h4>
+      <ul>
+        {% for error in errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  
+  <table class="table table-bordered">
+    <thead>
+      <tr>
+        {% for col in registros[0].keys() %}
+          <th>{{ col }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+        <tr>
+          {% for col in row.keys() %}
+            <td>{{ row[col] }}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <form method="POST" action="{{ url_for('main.preview_client_csv') }}">
+    <button type="submit" class="btn btn-success" {% if errors %}disabled{% endif %}>Confirmar Importação</button>
+    {% if errors %}
+      <p class="text-danger mt-2">Por favor, corrija os erros no arquivo CSV e refaça a importação.</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\upload_client_csv.html --
+{% extends "base.html" %}
+{% block title %}Importar Clientes CSV{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Importar Clientes via CSV</h2>
+  <form method="POST" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.csv_file.label(class="form-label") }}
+      {{ form.csv_file(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+  </form>
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\verificar_cliente.html --
+{% extends "base.html" %}
+{% block title %}Verificar Cliente Partilhado{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2>Verificação de Cliente Partilhado</h2>
+  {% if cliente_existente %}
+    <p>Já existe um cliente com dados semelhantes. Atualizar informações?</p>
+    <form method="POST" action="{{ url_for('main.resolver_conflitos_cliente', cliente_existente_id=cliente_existente.id) }}">
+      <!-- Inclua um campo hidden para identificar o cliente partilhado -->
+      <input type="hidden" name="cliente_partilhado_id" value="{{ cliente_partilhado.id }}">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Campo</th>
+            <th>Dados do Cliente Partilhado</th>
+            <th>Dados do Cliente Existente</th>
+            <th>Escolha</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for campo in ['name', 'number_interno', 'nif', 'address', 'email', 'telephone'] %}
+          <tr>
+            <td>{{ campo|capitalize }}</td>
+            <td>{{ getattr(cliente_partilhado, campo) or 'N/A' }}</td>
+            <td>{{ cliente_existente | get_attr(campo) or 'N/A' }}</td>
+            <td>
+              <select name="{{ campo }}_choice" class="form-control">
+                <option value="user1">Usar do Cliente Partilhado</option>
+                <option value="user2">Manter Cliente Existente</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Atualizar Informações</button>
+    </form>
+  {% else %}
+    <p>Não existe um cliente com dados similares. Deseja criar um novo cliente com os dados partilhados?</p>
+    <a href="{{ url_for('main.criar_cliente_partilhado', cliente_partilhado_id=cliente_partilhado.id) }}" class="btn btn-success">Criar Novo Cliente</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\accounting\contabilidade_cliente.html --
+{% extends "base.html" %}
+{% block title %}Contabilidade - {{ client.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center mb-4">Contabilidade - {{ client.name }}</h2>
+  <div class="row">
+    <!-- Coluna de Documentos Pagos Agrupados -->
+    <div class="col-md-6">
+      <h3>Documentos Pagos</h3>
+      {% if paid_docs %}
+        <div class="card mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center" style="min-height: 60px;">
+            <span class="fs-5">Documentos Pagos ({{ paid_docs|length }})</span>
+            <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePaidDocs" aria-expanded="false" aria-controls="collapsePaidDocs">
+              <i class="fa fa-chevron-down"></i> Expandir
+            </button>
+          </div>
+          <div class="collapse" id="collapsePaidDocs">
+            <div class="card-body">
+              {% for doc in paid_docs %}
+                <div class="card mb-2">
+                  <div class="card-header d-flex justify-content-between align-items-center p-2">
+                    <span><strong>{{ doc.tipo }}</strong> | #{{ doc.numero or doc.id }}</span>
+                  </div>
+                  <div class="card-body p-2">
+                    <p class="m-0">
+                      <strong>Adv:</strong> {{ doc.advogado or 'N/A' }} |
+                      <strong>Data Emissão:</strong> {% if doc.data_emissao %}{{ doc.data_emissao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %} |
+                      <strong>Descrição:</strong> {{ doc.details or '---' }} |
+                      <strong>Recibo/NC:</strong> {{ doc.numero_recibo or '---' }} |
+                      <strong>Valor (c/IVA):</strong> {{ doc.valor }} €
+                    </p>
+                  </div>
+                  <div class="card-footer d-flex gap-2 justify-content-end p-2">
+                    <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#modalStatus{{ doc.id }}">
+                      <i class="fa fa-exchange-alt"></i> Status: {{ doc.status_cobranca }}
+                    </button>
+                    <a href="{{ url_for('accounting.edit_documento', doc_id=doc.id) }}" class="btn btn-sm btn-secondary">
+                      <i class="fa fa-edit"></i> Editar
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Modal para Alterar Status -->
+                <div class="modal fade" id="modalStatus{{ doc.id }}" tabindex="-1" aria-labelledby="modalStatusLabel{{ doc.id }}" aria-hidden="true">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <form method="POST" action="{{ url_for('accounting.alterar_status_documento', doc_id=doc.id) }}">
+                        <div class="modal-header">
+                          <h5 class="modal-title" id="modalStatusLabel{{ doc.id }}">Alterar Status do Documento #{{ doc.numero or doc.id }}</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                          <label for="statusSelect{{ doc.id }}" class="form-label">Novo Status</label>
+                          <select name="status" id="statusSelect{{ doc.id }}" class="form-select mb-3">
+                            <option value="paga">Pago</option>
+                            <option value="recibo">Recibo</option>
+                            <option value="nota_credito">Nota de Crédito</option>
+                            <option value="tentativa_cobranca">Tentativa de Cobrança</option>
+                            <option value="em_tribunal">Em Tribunal</option>
+                            <option value="incobravel">Incobrável</option>
+                          </select>
+                          <label for="numeroRecibo{{ doc.id }}" class="form-label">Nº Recibo / NC (opcional)</label>
+                          <input type="text" name="numero_recibo" id="numeroRecibo{{ doc.id }}" class="form-control" placeholder="Ex: Recibo #1234">
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                          <button type="submit" class="btn btn-primary">Salvar</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <p>Nenhum documento pago encontrado.</p>
+      {% endif %}
+    </div>
+    
+    <!-- Coluna de Documentos Pendentes -->
+    <div class="col-md-6">
+      <h3>Documentos Pendentes</h3>
+      {% if pending_docs %}
+        {% for doc in pending_docs %}
+          <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <span><strong>{{ doc.tipo }}</strong> | #{{ doc.numero or doc.id }}</span>
+            </div>
+            <div class="card-body p-2">
+              {% set atraso = 0 %}
+              {% if doc.data_vencimento %}
+                {% set atraso = (today - doc.data_vencimento).days if today > doc.data_vencimento else 0 %}
+              {% endif %}
+              <p class="m-0">
+                <strong>Adv:</strong> {{ doc.advogado or 'N/A' }} |
+                <strong>Data Emissão:</strong> {% if doc.data_emissao %}{{ doc.data_emissao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %} ||
+                <strong>Descrição:</strong> {{ doc.details or '---' }} |
+                <strong>Recibo/NC:</strong> {{ doc.numero_recibo or '---' }} |
+                <strong>Valor (c/IVA):</strong> {{ doc.valor }} € |
+                <strong>Dias Atraso:</strong> {{ atraso }}
+              </p>
+            </div>
+            <div class="card-footer d-flex gap-2 justify-content-end">
+              <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#modalStatus{{ doc.id }}">
+                <i class="fa fa-exchange-alt"></i> Status: {{ doc.status_cobranca }}
+              </button>
+              <a href="{{ url_for('accounting.edit_documento', doc_id=doc.id) }}" class="btn btn-sm btn-secondary">
+                <i class="fa fa-edit"></i> Editar
+              </a>
+            </div>
+          </div>
+          
+          <!-- Modal para Alterar Status -->
+          <div class="modal fade" id="modalStatus{{ doc.id }}" tabindex="-1" aria-labelledby="modalStatusLabel{{ doc.id }}" aria-hidden="true">
+            <div class="modal-dialog">
+              <div class="modal-content">
+                <form method="POST" action="{{ url_for('accounting.alterar_status_documento', doc_id=doc.id) }}">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="modalStatusLabel{{ doc.id }}">Alterar Status do Documento #{{ doc.numero or doc.id }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <label for="statusSelect{{ doc.id }}" class="form-label">Novo Status</label>
+                    <select name="status" id="statusSelect{{ doc.id }}" class="form-select mb-3">
+                      <option value="paga">Pago</option>
+                      <option value="recibo">Recibo</option>
+                      <option value="nota_credito">Nota de Crédito</option>
+                      <option value="tentativa_cobranca">Tentativa de Cobrança</option>
+                      <option value="em_tribunal">Em Tribunal</option>
+                      <option value="incobravel">Incobrável</option>
+                    </select>
+                    <label for="numeroRecibo{{ doc.id }}" class="form-label">Nº Recibo / NC (opcional)</label>
+                    <input type="text" name="numero_recibo" id="numeroRecibo{{ doc.id }}" class="form-control" placeholder="Ex: Recibo #1234">
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p>Nenhum documento pendente encontrado.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% if request.args.get('modal') %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modalId = "modalInv{{ request.args.get('modal') }}";
+    var myModalEl = document.getElementById(modalId);
+    if(myModalEl){
+        var myModal = new bootstrap.Modal(myModalEl);
+        myModal.show();
+    }
+});
+</script>
+{% endif %}
+
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/models.py --
+# Tabela de associação para assuntos, prazos e clientes
+shared_assuntos = db.Table('shared_assuntos',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('assunto_id', db.Integer, db.ForeignKey('assuntos.id'))
+)
+
+shared_prazos = db.Table('shared_prazos',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('prazo_id', db.Integer, db.ForeignKey('prazos_judiciais.id'))
+)
+
+shared_clients = db.Table('shared_clients',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('client_id', db.Integer, db.ForeignKey('clients.id'))
+)
+
+class Client(db.Model):
+    __tablename__ = 'clients'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)  # unique=True removido
+    number_interno = db.Column(db.String(50), nullable=True)
+    nif = db.Column(db.String(50), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    telephone = db.Column(db.String(20), nullable=True)
+    
+    assuntos = db.relationship('Assunto', backref='client', lazy=True)
+    
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='uq_user_clientname'),
+    )
+    
+    # Relacionamento para partilha de clientes
+    shares = db.relationship('ClientShare', backref='client', lazy='dynamic')
+    
+    def __repr__(self):
+        return f'<Client {self.name}>'
+
+#  modelo de associação de partilha de clientes
+class ClientShare(db.Model):
+    __tablename__ = 'client_shares'
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
+    option = db.Column(db.String(50), nullable=False)  # Armazena "info", "historico" ou "billing"
+
+    def __repr__(self):
+        return f'<ClientShare client_id:{self.client_id} user_id:{self.user_id} option:{self.option}>'
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/forms.py --
+def unique_number_interno(form, field):
+    if field.data:
+        # Remove espaços em branco
+        data = field.data.strip()
+        existing = Client.query.filter(Client.number_interno == data).first()
+        if existing:
+            raise ValidationError('Este número interno já está em uso.')
+
+class ClientForm(FlaskForm):
+    name = StringField('Nome do Cliente', validators=[DataRequired()])
+    number_interno = StringField('Número Interno', validators=[Optional()])
+    nif = StringField('NIF', validators=[Optional()])
+    address = StringField('Morada', validators=[Optional()])
+    email = StringField('Email', validators=[Optional()])
+    telephone = StringField('Telefone', validators=[Optional()])
+    # NOVO: campo de partilha para clientes
+    shared_with = QuerySelectMultipleField(
+        'Compartilhar com',
+        query_factory=usuarios_query,
+        get_label='nickname',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Salvar Cliente')
+
+class ShareForm(FlaskForm):
+    shared_with = QuerySelectMultipleField(
+        'Compartilhar com',
+        query_factory=usuarios_query,
+        get_label='nickname',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Atualizar Compartilhamento')
+
+--------------------------------------------------------------------------------
+

@@ -7,11 +7,11 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "Mensagem do commit"
+git commit -m "Pôr aqui a mensagem sobre o que alterou"
 
 #E envie as alterações com git push.
 
-git push
+git push origin master
 
 #para gravar mudanças feitas no git hub , no pc, fazer
 

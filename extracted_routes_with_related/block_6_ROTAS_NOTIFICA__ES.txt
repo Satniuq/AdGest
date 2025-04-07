@@ -1,0 +1,348 @@
+==== BLOCO DE ROTAS EXTRAÍDO ====
+Arquivo: app/routes.py
+Bloco: ROTAS NOTIFICAÇÕES (Linhas 1393 a 1498)
+================================================================================
+
+#Rotas para notificações
+
+@main.route('/notifications')
+@login_required
+def notifications():
+    notifs = Notification.query.filter_by(user_id=current_user.id, is_read=False)\
+                               .order_by(Notification.timestamp.desc()).all()
+    for n in notifs:
+        current_app.logger.info(f"Notificação {n.id}: type={n.type}, extra={n.extra}")
+    return render_template('notifications.html', notifications=notifs)
+
+
+@main.route('/notifications/mark_read/<int:notif_id>', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    notif = Notification.query.get_or_404(notif_id)
+    if notif.user_id != current_user.id:
+        return jsonify({'status': 'error', 'message': 'Sem permissão'}), 403
+    notif.is_read = True
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+@main.route('/notification/view/<int:notif_id>')
+@login_required
+def notification_view(notif_id):
+    """Marca a notificação como lida e redireciona para a página de verificação ou link associado."""
+    notif = Notification.query.get_or_404(notif_id)
+
+    # Verifica se a notificação pertence ao usuário atual
+    if notif.user_id != current_user.id:
+        flash("Você não tem permissão para ver essa notificação.", "danger")
+        return redirect(url_for('main.notifications'))
+
+    # Marca a notificação como lida
+    notif.is_read = True
+    db.session.commit()
+
+    # Se for do tipo share_invite e tiver extra_data com cliente_id, redireciona para a verificação
+    if notif.type == 'share_invite' and notif.extra.get('cliente_id'):
+        return redirect(url_for('main.verificar_cliente_partilhado', cliente_id=notif.extra.get('cliente_id')))
+
+    # Caso contrário, redireciona para o link ou para o dashboard
+    if notif.link:
+        return redirect(notif.link)
+    else:
+        return redirect(url_for('main.dashboard'))
+
+
+@main.context_processor
+def inject_notifications():
+    if current_user.is_authenticated:
+        notifs_nao_lidas = Notification.query.filter_by(
+            user_id=current_user.id, is_read=False
+        ).order_by(Notification.timestamp.desc()).all()
+        unread = len(notifs_nao_lidas)
+        return dict(notifications=notifs_nao_lidas, unread_count=unread)
+    return dict(notifications=[], unread_count=0)
+
+@main.route('/notifications/historico')
+@login_required
+def notifications_historico():
+    notifs_lidas = Notification.query.filter_by(
+        user_id=current_user.id, is_read=True
+    ).order_by(Notification.timestamp.desc()).all()
+    return render_template('notifications_historico.html', notifications=notifs_lidas)
+
+import json
+
+def criar_notificacao(user_id, tipo, mensagem, link=None, extra_data=None):
+    if extra_data is None:
+        extra_data = {}
+    # Converte o dicionário extra_data para uma string JSON
+    extra_data_json = json.dumps(extra_data)
+    notif = Notification(
+        user_id=user_id,
+        type=tipo,
+        message=mensagem,
+        link=link,
+        extra_data=extra_data_json
+    )
+    db.session.add(notif)
+    db.session.commit()
+
+
+@main.route('/notifications/respond_share/<int:notif_id>/<string:acao>', methods=['POST'])
+@login_required
+def respond_share(notif_id, acao):
+    # acao pode ser 'accept' ou 'decline'
+    notif = Notification.query.get_or_404(notif_id)
+    # Verifique se o usuário tem permissão
+    if notif.user_id != current_user.id:
+        flash("Você não tem permissão para responder essa notificação.", "danger")
+        return redirect(url_for('main.notifications'))
+    # Processa a ação, por exemplo, atualize a partilha do item com base em notif.extra_data
+    # (Aqui você precisa implementar a lógica específica: atualizar o status da partilha no item)
+    if acao == 'accept':
+        # Exemplo: marcar a partilha como aceita no item compartilhado
+        flash("Partilha aceita!", "success")
+    else:
+        flash("Partilha recusada.", "warning")
+    # Marque a notificação como lida (ou remova-a)
+    notif.is_read = True
+    db.session.commit()
+    return redirect(url_for('main.notifications'))
+
+================================================================================
+
+==== ARQUIVOS RELACIONADOS ====
+
+-- Arquivo: app/templates\notifications.html --
+{% for notif in notifications %}
+  <div class="notification-item">
+    <p>{{ notif.message }}</p>
+    {% if notif.type == 'share_invite' and notif.extra.get('cliente_id') is not none %}
+      {# Notificação de partilha de cliente: botão "Verificar" que passa pela rota notification_view que marca como lida e redireciona para verificar_cliente_partilhado #}
+      <a href="{{ url_for('main.notification_view', notif_id=notif.id) }}" class="btn btn-sm btn-primary">Verificar</a>
+    {% else %}
+      {# Para os demais tipos – botão para marcar como lida #}
+      <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
+        <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
+      </form>
+    {% endif %}
+    <small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+  </div>
+{% else %}
+  <p>Nenhuma notificação.</p>
+{% endfor %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\notifications_historico.html --
+{% extends "base.html" %}
+{% block title %}Histórico de Notificações{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="my-4">Histórico de Notificações</h2>
+  {% if notifications %}
+    <ul class="list-group">
+      {% for notif in notifications %}
+        <li class="list-group-item">
+          <strong>{{ notif.message }}</strong>
+          <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+          {% if notif.link %}
+            <br><a href="{{ notif.link }}" class="btn btn-sm btn-primary mt-1">Ver</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Nenhuma notificação lida ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/models.py --
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    # ID do usuário que vai receber a notificação
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Tipo da notificação, por exemplo: 'share_invite', 'update', 'emission'
+    type = db.Column(db.String(50), nullable=False)
+    # Mensagem que será exibida ao usuário
+    message = db.Column(db.Text, nullable=False)
+    # URL para a ação relacionada, se houver (por exemplo, link para o item atualizado ou para aceitar/recusar uma partilha)
+    link = db.Column(db.String(255), nullable=True)
+    # Status: se a notificação já foi lida ou não (default False = não lida)
+    is_read = db.Column(db.Boolean, default=False)
+    # Data e hora em que a notificação foi gerada
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    # Campo extra para guardar informações adicionais (pode ser um JSON com detalhes específicos)
+    extra_data = db.Column(db.Text, nullable=True)
+
+    @property
+    def extra(self):
+        try:
+            return json.loads(self.extra_data) if self.extra_data else {}
+        except Exception:
+            return {}
+
+    def __repr__(self):
+        return f"<Notification {self.id} for User {self.user_id}: {self.type}>"
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/forms.py --
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates/base.html --
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <title>{% block title %}AdGest{% endblock %}</title>
+
+    <!-- FontAwesome (ou outra biblioteca de ícones) -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+    <!-- Seu CSS customizado (opcional) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('main.index') }}">AdGest</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fa-solid fa-bell"></i>
+                {% if unread_count > 0 %}
+                  <span class="badge bg-danger">{{ unread_count }}</span>
+                {% endif %}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotifications">
+                {% for notif in notifications %}
+                  <li class="dropdown-item d-flex justify-content-between align-items-start">
+                    <div>
+                      {{ notif.message }}  
+                      <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+                    </div>
+                    {% if notif.type == 'share_invite' and notif.extra.get('cliente_id') is not none %}
+                      {# Botão para notificações de partilha de cliente: chama notification_view que marca a notificação como lida e redireciona #}
+                      <a href="{{ url_for('main.notification_view', notif_id=notif.id) }}" class="btn btn-sm btn-primary">Verificar</a>
+                    {% else %}
+                      {# Para os demais casos, mantém o botão de marcar como lida #}
+                      <form method="POST" onsubmit="return markAsRead(event, {{ notif.id }})">
+                        <button class="btn btn-sm btn-outline-secondary ms-2" type="submit">Marcar como Lida</button>
+                      </form>
+                    {% endif %}
+                  </li>
+                {% else %}
+                  <li><span class="dropdown-item">Nenhuma notificação</span></li>
+                {% endfor %}
+                <li><hr class="dropdown-divider"></li>
+                <li>
+                  <a class="dropdown-item text-center" href="{{ url_for('main.notifications_historico') }}">
+                    Ver Histórico de Notificações
+                  </a>
+                </li>
+              </ul>                           
+            </li>            
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.clientes') }}">Clientes</a>
+            </li>
+            {% if current_user.is_authenticated and current_user.role not in ['contabilidade', 'backoffice'] %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('main.billing') }}">Billing</a>
+            </li>
+            {% endif %}
+            {% if current_user.is_authenticated and current_user.role in ['contabilidade', 'admin'] %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('accounting.manage_invoices') }}">
+                  Contabilidade
+                </a>
+              </li>
+            {% endif %}
+            {% if current_user.is_authenticated %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
+              </li>
+              {% if current_user.role == 'admin' %}
+                <li class="nav-item">
+                  <a class="nav-link" href="{{ url_for('main.register') }}">Registrar</a>
+                </li>
+              {% endif %}
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Área principal do site -->
+    <div class="container mt-3">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+
+    <!-- Bootstrap JS (inclui Popper.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Seu JS customizado (opcional) -->
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+
+    <!-- Função JavaScript para marcar notificações como lidas -->
+    <script>
+      function markAsRead(event, notifId) {
+        event.preventDefault(); // evita recarregar a página
+        fetch("{{ url_for('main.mark_notification_read', notif_id=0) }}".replace("0", notifId), {
+          method: "POST"
+        })
+        .then(response => {
+          if (response.ok) {
+            // Reload da página para atualizar o dropdown
+            window.location.reload();
+          } else {
+            alert("Erro ao marcar notificação como lida.");
+          }
+        })
+        .catch(err => console.error(err));
+        return false;
+      }
+    </script>
+  </body>
+</html>
+
+
+--------------------------------------------------------------------------------
+

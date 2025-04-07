@@ -1,0 +1,1612 @@
+==== BLOCO DE ROTAS EXTRAÍDO ====
+Arquivo: app/routes.py
+Bloco: ROTAS ASSUNTOS, TAREFAS E PRAZOS (Linhas 105 a 770)
+================================================================================
+
+@main.route('/dashboard')
+@login_required
+def dashboard():
+    assuntos = Assunto.query.filter(
+        or_(
+            Assunto.user_id == current_user.id,
+            Assunto.shared_with.any(id=current_user.id)
+        ),
+        Assunto.is_completed == False
+    ).order_by(Assunto.sort_order, Assunto.nome_assunto).all()
+
+    # Cria um dicionário para as tarefas visíveis para o usuário em cada assunto
+    assuntos_tarefas_visiveis = {}
+    for assunto in assuntos:
+        # Se o assunto está compartilhado, todas as tarefas são visíveis
+        if assunto.shared_with.count() > 0:
+            tarefas_visiveis = assunto.tarefas
+        else:
+            # Caso contrário, exibe somente as tarefas criadas pelo usuário
+            tarefas_visiveis = [tarefa for tarefa in assunto.tarefas if tarefa.user_id == current_user.id]
+        assuntos_tarefas_visiveis[assunto.id] = tarefas_visiveis
+
+    current_date = date.today()
+    tomorrow_date = current_date + timedelta(days=1)
+    prazos = PrazoJudicial.query.filter(
+        or_(
+            PrazoJudicial.user_id == current_user.id,
+            PrazoJudicial.shared_with.any(id=current_user.id)
+        ),
+        PrazoJudicial.status == False
+    ).order_by(PrazoJudicial.prazo).all()
+
+    return render_template(
+        'dashboard.html',
+        assuntos=assuntos,
+        assuntos_tarefas_visiveis=assuntos_tarefas_visiveis,
+        prazos=prazos,
+        current_date=current_date,
+        tomorrow_date=tomorrow_date
+    )
+
+
+### ROTAS PARA ASSUNTOS, TAREFAS E PRAZOS (já existentes) ###
+@main.route('/assunto/create', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def create_assunto():
+    form = AssuntoForm()
+    if form.validate_on_submit():
+        try:
+            if form.client_existing.data:
+                client_id = form.client_existing.data.id
+            else:
+                new_client = Client(
+                    user_id=current_user.id,
+                    name=form.client_new.data.strip()
+                )
+                db.session.add(new_client)
+                db.session.commit()
+                client_id = new_client.id
+            novo = Assunto(
+                user_id=current_user.id,
+                client_id=client_id,
+                nome_assunto=form.nome_assunto.data,
+                due_date=form.due_date.data,
+                sort_order=form.sort_order.data or 0
+            )
+            db.session.add(novo)
+            db.session.commit()
+            flash('Assunto criado com sucesso!', 'success')
+            return redirect(url_for('main.dashboard'))
+        except IntegrityError as e:
+            db.session.rollback()
+            if "UNIQUE constraint failed: clients.name" in str(e.orig):
+                flash("Erro: O nome do cliente já está registrado. Por favor, escolha outro nome.", 'danger')
+            else:
+                flash(f"Erro ao criar assunto: {str(e)}", 'danger')
+            current_app.logger.error(f'Erro ao criar assunto: {str(e)}')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao criar assunto: {str(e)}')
+            flash(f'Erro ao criar assunto: {str(e)}', 'danger')
+    return render_template('create_assunto.html', form=form)
+
+@main.route('/assunto/edit/<int:assunto_id>', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def edit_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    form = AssuntoForm(obj=assunto)
+    form.client_existing.query = Client.query
+    form.client_existing.data = assunto.client
+    if form.validate_on_submit():
+        try:
+            assunto.nome_assunto = form.nome_assunto.data
+            assunto.due_date = form.due_date.data
+            assunto.sort_order = form.sort_order.data or 0
+            if form.client_existing.data:
+                assunto.client_id = form.client_existing.data.id
+            else:
+                new_client = Client(
+                    user_id=current_user.id,
+                    name=form.client_new.data.strip()
+                )
+                db.session.add(new_client)
+                db.session.commit()
+                assunto.client_id = new_client.id
+            db.session.commit()
+            flash('Assunto atualizado com sucesso!', 'success')
+
+            # Define os usuários envolvidos: criador + usuários compartilhados
+            envolvidos = set()
+            envolvidos.add(assunto.user)
+            envolvidos.update(assunto.shared_with)
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} editou o assunto '{assunto.nome_assunto}'."
+                    link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
+            return redirect(url_for('main.dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao atualizar assunto: {str(e)}')
+            flash(f'Erro ao atualizar assunto: {str(e)}', 'danger')
+    return render_template('edit_assunto.html', form=form, assunto=assunto)
+
+
+@main.route('/assunto/delete/<int:assunto_id>', methods=['POST'])
+@login_required
+def delete_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    if assunto.user_id != current_user.id:
+        flash("Não pode excluir assuntos de outros usuários.", "danger")
+        return redirect(url_for('main.dashboard'))
+    try:
+        # Armazena a lista de usuários compartilhados antes de deletar
+        shared_users = list(assunto.shared_with)
+        db.session.execute(
+            shared_assuntos.delete().where(shared_assuntos.c.assunto_id == assunto.id)
+        )
+        db.session.delete(assunto)
+        db.session.commit()
+        flash('Assunto excluído com sucesso!', 'success')
+
+        for user in shared_users:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} excluiu o assunto '{assunto.nome_assunto}'."
+                criar_notificacao(user.id, "update", mensagem)
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao excluir assunto: {str(e)}')
+        flash(f'Erro ao excluir assunto: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+@main.route('/assunto/toggle_status/<int:assunto_id>', methods=['POST'])
+@login_required
+def toggle_status_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    try:
+        assunto.is_completed = not assunto.is_completed
+        if assunto.is_completed:
+            assunto.data_conclusao = datetime.utcnow().date()
+            assunto.completed_by = current_user.id
+            acao = "concluído"
+            # Marca todas as tarefas como concluídas também
+            for tarefa in assunto.tarefas:
+                tarefa.is_completed = True
+                tarefa.data_conclusao = datetime.utcnow().date()
+                tarefa.completed_by = current_user.id
+        else:
+            assunto.data_conclusao = None
+            assunto.completed_by = None
+            acao = "reaberto"
+        db.session.commit()
+        flash('Status do assunto atualizado!', 'success')
+        
+        # Notifica os envolvidos (criador e usuários partilhados, exceto o atual)
+        envolvidos = set()
+        envolvidos.add(assunto.user)
+        envolvidos.update(assunto.shared_with.all() if hasattr(assunto.shared_with, 'all') else assunto.shared_with)
+        for user in envolvidos:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} marcou o assunto '{assunto.nome_assunto}' como {acao}."
+                link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "update", mensagem, link)
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao alterar status do assunto: {str(e)}')
+        flash(f'Erro ao alterar status do assunto: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+
+@main.route('/tarefa/create/<int:assunto_id>', methods=['GET', 'POST'])
+@login_required
+def create_tarefa(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    form = TarefaForm()
+    if form.validate_on_submit():
+        try:
+            nova = Tarefa(
+                user_id=current_user.id,
+                assunto_id=assunto.id,
+                nome_tarefa=form.nome_tarefa.data,
+                descricao=form.descricao.data or '',
+                due_date=form.due_date.data,
+                sort_order=form.sort_order.data or 0,
+                horas=form.horas.data or 0.0,
+                is_completed=False
+            )
+            db.session.add(nova)
+            db.session.commit()
+            flash('Tarefa criada com sucesso!', 'success')
+
+            # Define o conjunto de usuários envolvidos:
+            # Inclui o criador do assunto e todos os usuários compartilhados.
+            envolvidos = set()
+            envolvidos.add(assunto.user)
+            envolvidos.update(assunto.shared_with)
+            
+            # Envia notificação para todos os envolvidos, exceto quem criou a tarefa.
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} criou a nova tarefa '{nova.nome_tarefa}' no assunto '{assunto.nome_assunto}'."
+                    link = url_for('main.tarefa_info', tarefa_id=nova.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
+            
+            return redirect(url_for('main.dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao criar tarefa: {str(e)}')
+            flash(f'Erro ao criar tarefa: {str(e)}', 'danger')
+    return render_template('create_tarefa.html', form=form, assunto=assunto)
+
+@main.route('/tarefa/edit/<int:tarefa_id>', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def edit_tarefa(tarefa_id):
+    tarefa = Tarefa.query.get_or_404(tarefa_id)
+    form = TarefaForm(obj=tarefa)
+    if form.validate_on_submit():
+        try:
+            tarefa.nome_tarefa = form.nome_tarefa.data
+            tarefa.descricao = form.descricao.data
+            tarefa.due_date = form.due_date.data
+            tarefa.sort_order = form.sort_order.data or 0
+            tarefa.horas = form.horas.data or 0.0
+            db.session.commit()
+            flash('Tarefa atualizada com sucesso!', 'success')
+            
+            # Define os usuários envolvidos: criador da tarefa e usuários compartilhados do assunto
+            envolvidos = set()
+            envolvidos.add(tarefa.user)
+            envolvidos.update(tarefa.assunto.shared_with)
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} editou a tarefa '{tarefa.nome_tarefa}'."
+                    link = url_for('main.tarefa_info', tarefa_id=tarefa.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
+                    
+            return redirect(url_for('main.dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao atualizar tarefa: {str(e)}')
+            flash(f'Erro ao atualizar tarefa: {str(e)}', 'danger')
+    return render_template('edit_tarefa.html', form=form, tarefa=tarefa)
+
+
+@main.route('/tarefa/delete/<int:tarefa_id>', methods=['POST'])
+@login_required
+def delete_tarefa(tarefa_id):
+    tarefa = Tarefa.query.get_or_404(tarefa_id)
+    if tarefa.user_id != current_user.id:
+        flash("Não pode excluir tarefas de outros usuários.", "danger")
+        return redirect(url_for('main.dashboard'))
+    # Notifica os usuários antes da exclusão
+    for user in tarefa.assunto.shared_with:
+        if user.id != current_user.id:
+            mensagem = f"{current_user.nickname} excluiu a tarefa '{tarefa.nome_tarefa}'."
+            criar_notificacao(user.id, "update", mensagem)
+    try:
+        db.session.delete(tarefa)
+        db.session.commit()
+        flash('Tarefa excluída com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao excluir tarefa: {str(e)}')
+        flash(f'Erro ao excluir tarefa: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+@main.route('/tarefa/add_hours/<int:tarefa_id>', methods=['POST'])
+@login_required
+def add_hours_tarefa(tarefa_id):
+    tarefa = Tarefa.query.get_or_404(tarefa_id)
+    try:
+        horas = float(request.form.get('horas', 0))
+        tarefa.horas += horas
+        registro = HoraAdicao(
+            item_type='tarefa',
+            item_id=tarefa.id,
+            horas_adicionadas=horas,
+            user_id=current_user.id
+        )
+        db.session.add(registro)
+        db.session.commit()
+        flash("Horas adicionadas com sucesso!", "success")
+        
+        # Cria um conjunto para unificar os usuários a serem notificados
+        notificados = set()
+        # Adiciona os usuários compartilhados no assunto
+        assunto_users = tarefa.assunto.shared_with.all() if hasattr(tarefa.assunto.shared_with, 'all') else tarefa.assunto.shared_with
+        for user in assunto_users:
+            notificados.add(user)
+        # Além disso, inclua o criador do assunto, se não for o usuário atual
+        if tarefa.assunto.user_id != current_user.id:
+            # Obtenha o usuário criador do assunto (ADM)
+            notificados.add(tarefa.assunto.user)
+        
+        # Remova o usuário que está adicionando as horas (ADV)
+        notificados = [user for user in notificados if user.id != current_user.id]
+
+        for user in notificados:
+            mensagem = f"{current_user.nickname} adicionou {horas}h na tarefa '{tarefa.nome_tarefa}'."
+            link = url_for('main.tarefa_info', tarefa_id=tarefa.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+            criar_notificacao(user.id, "update", mensagem, link)
+                
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao adicionar horas: {str(e)}", "danger")
+    return redirect(url_for('main.dashboard'))
+
+
+@main.route('/tarefa/toggle_status/<int:tarefa_id>', methods=['POST'])
+@login_required
+def toggle_status_tarefa(tarefa_id):
+    tarefa = Tarefa.query.get_or_404(tarefa_id)
+    try:
+        tarefa.is_completed = not tarefa.is_completed
+        if tarefa.is_completed:
+            tarefa.data_conclusao = datetime.utcnow().date()
+            tarefa.completed_by = current_user.id
+            acao = "concluída"
+        else:
+            tarefa.data_conclusao = None
+            tarefa.completed_by = None
+            acao = "reaberta"
+        db.session.commit()
+        flash('Status da tarefa atualizado!', 'success')
+        
+        notificados = set()
+        # Adiciona os usuários compartilhados do assunto
+        assunto_users = tarefa.assunto.shared_with.all() if hasattr(tarefa.assunto.shared_with, 'all') else tarefa.assunto.shared_with
+        for user in assunto_users:
+            notificados.add(user)
+        # Adiciona o dono do assunto
+        notificados.add(tarefa.assunto.user)
+        # Remove o usuário que executou a ação
+        notificados = [user for user in notificados if user.id != current_user.id]
+        
+        for user in notificados:
+            mensagem = f"{current_user.nickname} marcou a tarefa '{tarefa.nome_tarefa}' como {acao}."
+            link = url_for('main.tarefa_info', tarefa_id=tarefa.id) if 'tarefa_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+            criar_notificacao(user.id, "update", mensagem, link)
+            
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao alterar status da tarefa: {str(e)}')
+        flash(f'Erro ao alterar status da tarefa: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+
+@main.route('/prazos/create', methods=['GET', 'POST'])
+@login_required
+def create_prazo():
+    form = PrazoJudicialForm()
+    if form.is_submitted() and not form.validate():
+        print("Erros do formulário de prazo:", form.errors)
+    if form.validate_on_submit():
+        try:
+            if form.client_existing.data:
+                client_id = form.client_existing.data.id
+            else:
+                new_client = Client(
+                    user_id=current_user.id,  # Adicionado aqui
+                    name=form.client_new.data.strip()
+                 )
+                db.session.add(new_client)
+                db.session.commit()
+                client_id = new_client.id
+            novo = PrazoJudicial(
+                user_id=current_user.id,
+                client_id=client_id,
+                assunto=form.assunto.data,
+                processo=form.processo.data,
+                prazo=form.prazo.data,
+                comentarios=form.comentarios.data or ''
+            )
+            if form.shared_with.data:
+                novo.shared_with = form.shared_with.data
+
+            db.session.add(novo)
+            db.session.commit()
+            flash('Prazo criado com sucesso!', 'success')
+            return redirect(url_for('main.dashboard'))
+        except IntegrityError as e:
+            db.session.rollback()
+            # Verifica se o erro se refere à constraint UNIQUE do nome do cliente
+            if "UNIQUE constraint failed: clients.name" in str(e.orig):
+                flash("Erro: O nome do cliente já está registrado. Por favor, escolha outro nome.", 'danger')
+            else:
+                flash(f"Erro ao criar prazo: {str(e)}", 'danger')
+            current_app.logger.error(f'Erro ao criar prazo: {str(e)}')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao criar prazo: {str(e)}')
+            flash(f'Erro ao criar prazo: {str(e)}', 'danger')
+    return render_template('prazos_judiciais.html', form=form)
+
+@main.route('/prazo/edit/<int:prazo_id>', methods=['GET', 'POST'])
+@login_required
+def edit_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    old_shared = list(prazo.shared_with)  # Se necessário para comparação ou para notificações
+    form = PrazoJudicialForm(obj=prazo)
+    form.client_existing.query = Client.query
+    form.client_existing.data = prazo.client
+    if form.validate_on_submit():
+        try:
+            if form.client_existing.data:
+                prazo.client_id = form.client_existing.data.id
+            else:
+                new_client = Client(
+                    user_id=current_user.id,
+                    name=form.client_new.data.strip()
+                )
+                db.session.add(new_client)
+                db.session.commit()
+                prazo.client_id = new_client.id
+
+            prazo.assunto = form.assunto.data
+            prazo.processo = form.processo.data
+            prazo.prazo = form.prazo.data
+            prazo.comentarios = form.comentarios.data or ''
+            
+            # Atualiza o compartilhamento sem remover os já existentes
+            if current_user.id == prazo.user_id:
+                # Se o editor é o criador, preserva os compartilhamentos já existentes e adiciona os novos
+                prazo.shared_with = list(set(prazo.shared_with).union(set(form.shared_with.data)))
+            else:
+                # Se o editor não é o criador, utiliza os dados do formulário,
+                # mas garante que o próprio usuário que está editando continue na partilha
+                prazo.shared_with = form.shared_with.data
+                if current_user not in prazo.shared_with:
+                    prazo.shared_with.append(current_user)
+            
+            prazo.horas = form.horas.data or 0.0
+            db.session.commit()
+            flash('Prazo atualizado com sucesso!', 'success')
+
+            # Notifica todos os envolvidos: criador + todos os usuários compartilhados
+            envolvidos = set()
+            envolvidos.add(prazo.user)
+            envolvidos.update(prazo.shared_with)
+            for user in envolvidos:
+                if user.id != current_user.id:
+                    mensagem = f"{current_user.nickname} editou o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+                    link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                    criar_notificacao(user.id, "update", mensagem, link)
+            return redirect(url_for('main.dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Erro ao atualizar prazo: {str(e)}')
+            flash(f'Erro ao atualizar prazo: {str(e)}', 'danger')
+    return render_template('edit_prazo.html', form=form, prazo=prazo)
+
+
+@main.route('/prazo/delete/<int:prazo_id>', methods=['POST'])
+@login_required
+def delete_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    if prazo.user_id != current_user.id:
+        flash("Não pode excluir prazos de outros usuários.", "danger")
+        return redirect(url_for('main.dashboard'))
+    try:
+        # Armazena os usuários compartilhados antes de deletar
+        shared_users = list(prazo.shared_with)
+        db.session.execute(
+            shared_prazos.delete().where(shared_prazos.c.prazo_id == prazo.id)
+        )
+        db.session.delete(prazo)
+        db.session.commit()
+        flash('Prazo excluído com sucesso!', 'success')
+
+        for user in shared_users:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} excluiu o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+                criar_notificacao(user.id, "update", mensagem)
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao excluir prazo: {str(e)}')
+        flash(f'Erro ao excluir prazo: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+
+@main.route('/prazo/add_hours/<int:prazo_id>', methods=['POST'])
+@login_required
+def add_hours_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    try:
+        horas = float(request.form.get('horas', 0))
+        prazo.horas += horas
+        registro = HoraAdicao(
+            item_type='prazo',
+            item_id=prazo.id,
+            horas_adicionadas=horas,
+            user_id=current_user.id
+        )
+        db.session.add(registro)
+        db.session.commit()
+        flash("Horas adicionadas com sucesso!", "success")
+        
+        # Cria um conjunto para unificar os usuários a serem notificados
+        notificados = set()
+        # Adiciona os usuários explicitamente compartilhados no prazo
+        prazo_users = prazo.shared_with.all() if hasattr(prazo.shared_with, 'all') else prazo.shared_with
+        for user in prazo_users:
+            notificados.add(user)
+        # Inclui o criador do prazo (ADM) mesmo que não esteja na lista de compartilhamento
+        if prazo.user_id != current_user.id:
+            notificados.add(prazo.user)
+        
+        # Remove o usuário que está adicionando as horas (ADV)
+        notificados = [user for user in notificados if user.id != current_user.id]
+        
+        for user in notificados:
+            mensagem = f"{current_user.nickname} adicionou {horas}h ao prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+            link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+            criar_notificacao(user.id, "update", mensagem, link)
+                
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao adicionar horas: {str(e)}", "danger")
+    return redirect(url_for('main.dashboard'))
+
+@main.route('/prazo/toggle_status/<int:prazo_id>', methods=['POST'])
+@login_required
+def toggle_status_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    try:
+        prazo.status = not prazo.status
+        if prazo.status:
+            prazo.data_conclusao = datetime.utcnow().date()
+            prazo.completed_by = current_user.id
+            acao = "concluído"
+        else:
+            prazo.data_conclusao = None
+            prazo.completed_by = None
+            acao = "reaberto"
+        db.session.commit()
+        flash('Status do prazo atualizado!', 'success')
+        
+        # Unir usuários a notificar: usuários compartilhados no prazo e o dono do prazo
+        notificados = set()
+        prazo_users = prazo.shared_with.all() if hasattr(prazo.shared_with, 'all') else prazo.shared_with
+        for user in prazo_users:
+            notificados.add(user)
+        # Adiciona o criador do prazo
+        notificados.add(prazo.user)
+        # Remove o usuário atual
+        notificados = [user for user in notificados if user.id != current_user.id]
+        
+        for user in notificados:
+            mensagem = f"{current_user.nickname} marcou o prazo '{prazo.assunto}' como {acao}."
+            link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+            criar_notificacao(user.id, "update", mensagem, link)
+            
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao alterar status do prazo: {str(e)}')
+        flash(f'Erro ao alterar status do prazo: {str(e)}', 'danger')
+    return redirect(url_for('main.dashboard'))
+
+# Rotas para compartilhar assuntos e prazos
+
+@main.route('/assunto/share/<int:assunto_id>', methods=['GET', 'POST'])
+@login_required
+def share_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    if assunto.user_id != current_user.id:
+        flash("Não pode compartilhar assuntos de outros usuários.", "danger")
+        return redirect(url_for('main.dashboard'))
+    form = ShareForm(obj=assunto)
+    if form.validate_on_submit():
+        # Obtém os usuários com quem o assunto será compartilhado
+        novos_usuarios = form.shared_with.data
+        assunto.shared_with = novos_usuarios
+
+        db.session.commit()
+        flash("Assunto e todas as tarefas associadas foram compartilhados com sucesso!", "success")
+        
+        # Gera notificações para os usuários (exceto o usuário atual)
+        for user in novos_usuarios:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o assunto {assunto.nome_assunto}"
+                # Ajuste a rota do link conforme a sua aplicação (por exemplo, para ver detalhes do assunto)
+                link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "share_invite", mensagem, link)
+        
+        return redirect(url_for('main.dashboard'))
+    return render_template('share_assunto.html', form=form, assunto=assunto)
+
+
+@main.route('/prazo/share/<int:prazo_id>', methods=['GET', 'POST'])
+@login_required
+def share_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    if prazo.user_id != current_user.id:
+        flash("Não pode compartilhar prazos de outro usuário.", "danger")
+        return redirect(url_for('main.dashboard'))
+    form = ShareForm(obj=prazo)
+    if form.validate_on_submit():
+        novos_usuarios = form.shared_with.data
+        prazo.shared_with = novos_usuarios
+        db.session.commit()
+        flash("Prazo compartilhado com sucesso!", "success")
+        
+        # Gera notificações para os usuários (exceto o usuário atual)
+        for user in novos_usuarios:
+            if user.id != current_user.id:
+                mensagem = f"{current_user.nickname} partilhou consigo o prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+                link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
+                criar_notificacao(user.id, "share_invite", mensagem, link)
+        
+        return redirect(url_for('main.dashboard'))
+    return render_template('share_prazo.html', form=form, prazo=prazo)
+
+### ROTA PARA GUARDAR REORGANIZAÇÃO DOS ASSUNTOS NO DASHBOARD
+
+@main.route('/update_assuntos_order', methods=['POST'])
+@login_required
+def update_assuntos_order():
+    data = request.get_json()
+    if not data or 'ordem' not in data:
+        return jsonify({'status': 'error', 'message': 'Dados inválidos'}), 400
+    
+    ordem = data['ordem']
+    try:
+        for item in ordem:
+            assunto_id = int(item['id'])
+            new_order = int(item['sort_order'])
+            assunto = Assunto.query.get(assunto_id)
+            # Log para depuração
+            current_app.logger.info(f"Tentando atualizar assunto {assunto_id} para ordem {new_order}")
+            if assunto and assunto.user_id == current_user.id:
+                assunto.sort_order = new_order
+                current_app.logger.info(f"Assunto {assunto_id} atualizado com nova ordem {new_order}")
+            else:
+                current_app.logger.warning(f"Assunto {assunto_id} não encontrado ou não pertence ao usuário {current_user.id}")
+        db.session.commit()
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao atualizar ordem: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+================================================================================
+
+==== ARQUIVOS RELACIONADOS ====
+
+-- Arquivo: app/templates\create_assunto.html --
+{% extends "base.html" %}
+{% block title %}Criar/Editar Assunto{% endblock %}
+{% block content %}
+  <h2>Criar/Editar Assunto</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+
+    {% if form.errors %}
+      <div class="alert alert-danger">
+        <ul>
+          {% for field, errors in form.errors.items() %}
+            {% for error in errors %}
+              <li>{{ field }}: {{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="mb-3">
+      {{ form.client_existing.label }}<br>
+      {{ form.client_existing(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.client_new.label }}<br>
+      {{ form.client_new(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.nome_assunto.label }}<br>
+      {{ form.nome_assunto(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.due_date.label }}<br>
+      {{ form.due_date(type="date", class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.sort_order.label }}<br>
+      {{ form.sort_order(class="form-control") }}
+    </div>
+    <div>
+      {{ form.submit(class="btn btn-primary") }}
+    </div>
+  </form>
+  <p><a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Voltar</a></p>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\create_tarefa.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Criar Tarefa{% endblock %}
+{% block content %}
+<h2>Criar Tarefa para o Assunto: {{ assunto.nome_assunto }}</h2>
+<form method="POST" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.nome_tarefa) }}
+  {{ macros.render_field(form.descricao) }}
+  {{ macros.render_field(form.due_date) }}
+  {{ macros.render_field(form.sort_order) }}
+  {{ macros.render_field(form.horas) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+<p><a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Voltar</a></p>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\dashboard.html --
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<div class="container my-4">
+  <!-- Linha superior: 3 janelinhas colapsáveis + botões à direita -->
+  <div class="row align-items-start mb-3">
+    <!-- JANELINHA HOJE -->
+    <div class="col-md-2">
+      <div class="card">
+        <!-- Cabeçalho colapsável -->
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseHoje"
+                  aria-expanded="false"
+                  aria-controls="collapseHoje">
+            Hoje <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>        
+        <!-- Corpo colapsado -->
+        <div id="collapseHoje" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas de HOJE -->
+            {% for assunto in assuntos %}
+              {% set tarefas_hoje = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.due_date and tarefa.due_date <= current_date %}
+                  {% set _ = tarefas_hoje.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_hoje = (assunto.due_date and assunto.due_date <= current_date) %}
+              {% if assunto_e_hoje or tarefas_hoje|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_hoje %}
+                    {% if tarefas_hoje %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_hoje %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa de hoje</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_hoje %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos de HOJE -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if prazo.prazo and prazo.prazo <= current_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JANELINHA AMANHÃ -->
+    <div class="col-md-2">
+      <div class="card">
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseAmanha"
+                  aria-expanded="false"
+                  aria-controls="collapseAmanha">
+            Amanhã <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>
+        <div id="collapseAmanha" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas de AMANHÃ -->
+            {% for assunto in assuntos %}
+              {% set tarefas_amanha = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.due_date and tarefa.due_date == tomorrow_date %}
+                  {% set _ = tarefas_amanha.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_amanha = (assunto.due_date and assunto.due_date == tomorrow_date) %}
+              {% if assunto_e_amanha or tarefas_amanha|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_amanha %}
+                    {% if tarefas_amanha %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_amanha %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa para amanhã</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_amanha %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos de AMANHÃ -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if prazo.prazo and prazo.prazo == tomorrow_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JANELINHA DEPOIS -->
+    <div class="col-md-2">
+      <div class="card">
+        <div class="card-header p-2">
+          <button class="btn btn-sm btn-light text-dark w-100 fs-5 text-start"
+                  type="button" data-bs-toggle="collapse"
+                  data-bs-target="#collapseDepois"
+                  aria-expanded="false"
+                  aria-controls="collapseDepois">
+            Depois <i class="fa-solid fa-angle-down float-end"></i>
+          </button>
+        </div>
+        <div id="collapseDepois" class="collapse">
+          <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+            <!-- Assuntos e Tarefas DEPOIS -->
+            {% for assunto in assuntos %}
+              {% set tarefas_depois = [] %}
+              {% for tarefa in assunto.tarefas %}
+                {% if not tarefa.due_date or tarefa.due_date > tomorrow_date %}
+                  {% set _ = tarefas_depois.append(tarefa) %}
+                {% endif %}
+              {% endfor %}
+              {% set assunto_e_depois = (not assunto.due_date or assunto.due_date > tomorrow_date) %}
+              {% if assunto_e_depois or tarefas_depois|length > 0 %}
+                <div class="mb-2">
+                  <strong>{{ assunto.nome_assunto }}</strong> - <em>{{ assunto.client.name }}</em>
+                  {% if assunto_e_depois %}
+                    {% if tarefas_depois %}
+                      <ul class="list-group mt-1">
+                        {% for t in tarefas_depois %}
+                          <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                        {% endfor %}
+                      </ul>
+                    {% else %}
+                      <small class="text-muted">Nenhuma tarefa para depois</small>
+                    {% endif %}
+                  {% else %}
+                    <ul class="list-group mt-1">
+                      {% for t in tarefas_depois %}
+                        <li class="list-group-item p-1">{{ t.nome_tarefa }}</li>
+                      {% endfor %}
+                    </ul>
+                  {% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+
+            <!-- Prazos DEPOIS -->
+            <h6 class="mt-2">Prazos</h6>
+            {% for prazo in prazos %}
+              {% if not prazo.prazo or prazo.prazo > tomorrow_date %}
+                <div class="mb-2">
+                  <strong>{{ prazo.assunto }}</strong> - <em>{{ prazo.client.name }}</em>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coluna Botões à Direita -->
+    <div class="col d-flex justify-content-end">
+      <a href="{{ url_for('main.create_assunto') }}" class="btn btn-primary me-2">
+        <i class="fa-solid fa-plus"></i> Criar Assunto
+      </a>
+      <a href="{{ url_for('main.create_prazo') }}" class="btn btn-secondary">
+        <i class="fa-solid fa-plus"></i> Criar Prazo
+      </a>
+    </div>
+  </div>
+
+  <!-- Linha inferior: Assuntos e Prazos lado a lado -->
+  <div class="row">
+    <!-- Coluna Assuntos -->
+    <div class="col-lg-8">
+      <h4 class="mb-3">Assuntos</h4>
+      <div id="assuntos-container" class="row row-cols-1 row-cols-lg-2 g-3">
+        {% for assunto in assuntos %}
+        <div class="col" data-id="{{ assunto.id }}">
+          <div class="card h-100">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <h5 class="mb-0 flex-grow-1" style="white-space: normal;">
+                  {{ assunto.nome_assunto }}
+                </h5>
+              </div>
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    {{ assunto.user.nickname }}{% for usuario in assunto.shared_with %} / {{ usuario.nickname }}{% endfor %}
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('main.share_assunto', assunto_id=assunto.id) }}">
+                        <i class="fa-solid fa-share-nodes"></i> Compartilhar
+                      </a>
+                    </li>
+                  </ul>
+                </div>                                             
+                <div class="d-flex align-items-center gap-2">
+                  <form action="{{ url_for('main.toggle_status_assunto', assunto_id=assunto.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                      <i class="fa-solid fa-check"></i>
+                    </button>
+                  </form>
+                  <a href="{{ url_for('main.edit_assunto', assunto_id=assunto.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </a>
+                  <form action="{{ url_for('main.delete_assunto', assunto_id=assunto.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              {% set total_horas = 0 %}
+              {% for tarefa in assunto.tarefas %}
+                {% if tarefa.horas %}
+                  {% set total_horas = total_horas + tarefa.horas %}
+                {% endif %}
+              {% endfor %}
+              <p class="mb-2" style="white-space: normal;">
+                <strong>Cliente:</strong> {{ assunto.client.name }} |
+                <strong>Data:</strong>
+                {% if assunto.due_date %}
+                  {{ assunto.due_date.strftime('%d/%m/%Y') }}
+                {% else %}
+                  Sem data
+                {% endif %}
+                | <i class="fa-solid fa-clock"></i> {{ total_horas|default(0) }}h
+              </p>
+              <!-- Botão para mostrar Tarefas -->
+              <button class="btn btn-primary mb-2" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#tarefas-{{ assunto.id }}" aria-expanded="false" aria-controls="tarefas-{{ assunto.id }}">
+                <i class="fa-solid fa-eye"></i> Tarefas
+              </button>
+              <div class="collapse" id="tarefas-{{ assunto.id }}">
+                <ul class="list-group mb-3">
+                  {% for tarefa in assuntos_tarefas_visiveis[assunto.id] if not tarefa.is_completed %}
+                  <li class="list-group-item">
+                    <!-- Primeira linha: Botões principais -->
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <div class="flex-grow-1">
+                        <strong>{{ tarefa.nome_tarefa }}</strong>
+                        {% if tarefa.descricao %}
+                          <em>({{ tarefa.descricao }})</em>
+                        {% endif %}
+                      </div>
+                      <div class="d-flex gap-1">
+                        <!-- Botão Concluir -->
+                        <form action="{{ url_for('main.toggle_status_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                            <i class="fa-solid fa-check"></i>
+                          </button>
+                        </form>
+                        <!-- Botão Editar -->
+                        <a href="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                        </a>
+                        <!-- Botão Excluir -->
+                        <form action="{{ url_for('main.delete_tarefa', tarefa_id=tarefa.id) }}" method="POST" class="d-inline">
+                          <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                            <i class="fa-solid fa-trash"></i>
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                    <!-- Segunda linha: Apenas o Botão Adicionar Horas -->
+                    <div class="d-flex justify-content-end align-items-center gap-2 mt-2">
+                      <button class="btn btn-sm btn-outline-secondary add-hours-tarefa"
+                              data-tarefa-id="{{ tarefa.id }}" title="Adicionar Horas">
+                        <i class="fa-solid fa-clock"></i> {{ tarefa.horas|default(0) }}h
+                      </button>
+                    </div>
+                  </li>                  
+                  {% else %}
+                    <li class="list-group-item text-muted">Nenhuma tarefa pendente.</li>
+                  {% endfor %}
+                </ul>                
+                <!-- Botão Criar Tarefa -->
+                <a href="{{ url_for('main.create_tarefa', assunto_id=assunto.id) }}" class="btn btn-primary">
+                  <i class="fa-solid fa-plus"></i> Criar Tarefa
+                </a>
+              </div>              
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted">Nenhum assunto cadastrado.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Coluna Prazos -->
+    <div class="col-lg-4">
+      <h4 class="mb-3">Prazos</h4>
+      <div class="row row-cols-1 g-3">
+        {% for prazo in prazos %}
+        <div class="col">
+          <div class="card h-100">
+            <div class="card-header">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <h5 class="mb-0 flex-grow-1" style="white-space: normal;">
+                  {{ prazo.assunto }}
+                </h5>
+              </div>
+              <div class="d-flex justify-content-between align-items-center">
+                <div class="dropdown">
+                  <button class="btn btn-sm btn-light dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    {{ prazo.user.nickname }}
+                    {% for usuario in prazo.shared_with %}
+                      / {{ usuario.nickname }}
+                    {% endfor %}
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                      <a class="dropdown-item" href="{{ url_for('main.share_prazo', prazo_id=prazo.id) }}">
+                        <i class="fa-solid fa-share-nodes"></i> Compartilhar
+                      </a>
+                    </li>
+                  </ul>
+                </div>                
+                <div class="d-flex align-items-center gap-2">
+                  <form action="{{ url_for('main.toggle_status_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-success" title="Concluir">
+                      <i class="fa-solid fa-check"></i>
+                    </button>
+                  </form>
+                  <a href="{{ url_for('main.edit_prazo', prazo_id=prazo.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </a>
+                  <form action="{{ url_for('main.delete_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                      <i class="fa-solid fa-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="card-text mb-2" style="white-space: normal;">
+                <strong>Processo:</strong> {{ prazo.processo }} |
+                <strong>Cliente:</strong> {{ prazo.client.name }} |
+                <strong>Data:</strong>
+                {% if prazo.prazo %}
+                  {{ prazo.prazo.strftime('%d/%m/%Y') }}
+                {% else %}
+                  Sem data
+                {% endif %}
+              </p>
+              <!-- Botão de Horas (Prazo) -->
+              <div class="d-flex justify-content-end">
+                <button class="btn btn-sm btn-outline-secondary add-hours-prazo"
+                        data-prazo-id="{{ prazo.id }}" title="Adicionar Horas">
+                  <i class="fa-solid fa-clock"></i> {{ prazo.horas|default(0) }}h
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="text-muted">Nenhum prazo cadastrado.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modais e Scripts de Adicionar Horas -->
+<div class="modal fade" id="modalHorasPrazo" tabindex="-1" aria-labelledby="modalHorasPrazoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formHorasPrazo" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalHorasPrazoLabel">Adicionar Horas ao Prazo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inputHorasPrazo" class="form-label">Horas</label>
+            <input type="number" step="0.1" class="form-control" id="inputHorasPrazo" name="horas" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalHorasTarefa" tabindex="-1" aria-labelledby="modalHorasTarefaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formHorasTarefa" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalHorasTarefaLabel">Adicionar Horas à Tarefa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="inputHorasTarefa" class="form-label">Horas</label>
+            <input type="number" step="0.1" class="form-control" id="inputHorasTarefa" name="horas" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Sortable.js e Scripts "Adicionar Horas" -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var containerAssuntos = document.getElementById('assuntos-container');
+    if (containerAssuntos) {
+      new Sortable(containerAssuntos, {
+        animation: 150,
+        onEnd: function (evt) {
+          // Cria um array com a nova ordem de cada card
+          var ordem = [];
+          var cards = containerAssuntos.querySelectorAll('[data-id]');
+          cards.forEach(function(card, index) {
+            var assuntoId = card.getAttribute('data-id');
+            ordem.push({ id: assuntoId, sort_order: index });
+          });
+          console.log("Nova ordem enviada:", ordem);
+          
+          // Envia a nova ordem para o servidor via fetch
+          fetch('{{ url_for("main.update_assuntos_order") }}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ordem: ordem })
+          })
+          .then(response => response.json())
+          .then(data => {
+            console.log("Resposta do servidor:", data);
+            if (data.status !== 'ok') {
+              console.error('Erro ao atualizar ordem:', data.message);
+            }
+          })
+          .catch(error => console.error('Erro na requisição:', error));
+        }
+      });
+    }
+    
+    // Scripts para os modais "adicionar horas"
+    const btnsHorasPrazo = document.querySelectorAll('.add-hours-prazo');
+    btnsHorasPrazo.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const prazoId = this.getAttribute('data-prazo-id');
+        const form = document.getElementById('formHorasPrazo');
+        form.action = '/prazo/add_hours/' + prazoId;
+        document.getElementById('inputHorasPrazo').value = '';
+        const modalHorasPrazo = new bootstrap.Modal(document.getElementById('modalHorasPrazo'));
+        modalHorasPrazo.show();
+      });
+    });
+
+    const btnsHorasTarefa = document.querySelectorAll('.add-hours-tarefa');
+    btnsHorasTarefa.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        const tarefaId = this.getAttribute('data-tarefa-id');
+        const form = document.getElementById('formHorasTarefa');
+        form.action = '/tarefa/add_hours/' + tarefaId;
+        document.getElementById('inputHorasTarefa').value = '';
+        const modalHorasTarefa = new bootstrap.Modal(document.getElementById('modalHorasTarefa'));
+        modalHorasTarefa.show();
+      });
+    });
+  });
+</script>
+
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\edit_assunto.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Editar Assunto{% endblock %}
+{% block content %}
+<h2>Editar Assunto</h2>
+<form method="POST" action="{{ url_for('main.edit_assunto', assunto_id=assunto.id) }}" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.client_existing) }}
+  {{ macros.render_field(form.client_new) }}
+  {{ macros.render_field(form.nome_assunto) }}
+  {{ macros.render_field(form.due_date) }}
+  {{ macros.render_field(form.sort_order) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\edit_prazo.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Editar Prazo{% endblock %}
+{% block content %}
+<h2>Editar Prazo</h2>
+<form method="POST" action="{{ url_for('main.edit_prazo', prazo_id=prazo.id) }}" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.client_existing) }}
+  {{ macros.render_field(form.client_new) }}
+  {{ macros.render_field(form.assunto) }}
+  {{ macros.render_field(form.processo) }}
+  {{ macros.render_field(form.prazo) }}
+  {{ macros.render_field(form.comentarios) }}
+  {{ macros.render_field(form.horas) }}  {# Campo para inserir manualmente as horas #}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\edit_tarefa.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Editar Tarefa{% endblock %}
+{% block content %}
+<h2>Editar Tarefa</h2>
+<form method="POST" action="{{ url_for('main.edit_tarefa', tarefa_id=tarefa.id) }}" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.nome_tarefa) }}
+  {{ macros.render_field(form.descricao) }}
+  {{ macros.render_field(form.due_date) }}
+  {{ macros.render_field(form.sort_order) }}
+  {{ macros.render_field(form.horas) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\prazos_judiciais.html --
+{% extends "base.html" %}
+{% import "macros.html" as macros %}
+{% block title %}Criar Prazo Judicial{% endblock %}
+{% block content %}
+<h2>Criar Prazo Judicial</h2>
+<form method="POST" class="needs-validation" novalidate>
+  {{ form.hidden_tag() }}
+  {{ macros.render_field(form.client_existing) }}
+  {{ macros.render_field(form.client_new) }}
+  {{ macros.render_field(form.assunto) }}
+  {{ macros.render_field(form.processo) }}
+  {{ macros.render_field(form.prazo) }}
+  {{ macros.render_field(form.comentarios) }}
+  <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+</form>
+<p><a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Voltar</a></p>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\share_assunto.html --
+{% extends "base.html" %}
+{% block title %}Compartilhar Assunto{% endblock %}
+{% block content %}
+  <h2>Compartilhar Assunto: {{ assunto.nome_assunto }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Cancelar</a>
+  </form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\share_prazo.html --
+{% extends "base.html" %}
+{% block title %}Compartilhar Prazo{% endblock %}
+{% block content %}
+  <h2>Compartilhar Prazo: {{ prazo.assunto }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Cancelar</a>
+  </form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\share_tarefa.html --
+{% extends "base.html" %}
+{% block title %}Compartilhar Tarefa{% endblock %}
+{% block content %}
+  <h2>Compartilhar Tarefa: {{ tarefa.nome_tarefa }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('main.dashboard') }}" class="btn btn-link">Cancelar</a>
+  </form>
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/models.py --
+# Tabela de associação para assuntos, prazos e clientes
+shared_assuntos = db.Table('shared_assuntos',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('assunto_id', db.Integer, db.ForeignKey('assuntos.id'))
+)
+
+shared_prazos = db.Table('shared_prazos',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('prazo_id', db.Integer, db.ForeignKey('prazos_judiciais.id'))
+)
+
+shared_clients = db.Table('shared_clients',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id')),
+    db.Column('client_id', db.Integer, db.ForeignKey('clients.id'))
+)
+
+class Assunto(db.Model):
+    __tablename__ = 'assuntos'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)  # Dono
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    nome_assunto = db.Column(db.String(100), nullable=False)
+    due_date = db.Column(db.Date, nullable=True)
+    sort_order = db.Column(db.Integer, default=0)
+    horas_assunto = db.Column(db.Float, default=0.0)
+    is_completed = db.Column(db.Boolean, default=False)
+    is_billed = db.Column(db.Boolean, default=False)
+    completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    tarefas = db.relationship('Tarefa', backref='assunto', cascade="all, delete-orphan", lazy='dynamic')
+    shared_with = db.relationship(
+        'User',
+        secondary=shared_assuntos,
+        backref=db.backref('shared_assuntos', lazy='dynamic', overlaps="assuntos_compartilhados,compartilhados"),
+        lazy='dynamic',
+        overlaps="assuntos_compartilhados,compartilhados"
+    )
+
+    # RELACIONAMENTO PARA ACESSAR O DONO – certifique-se de que ESTÁ indentado dentro da classe
+    user = db.relationship("User", backref="assuntos_criados", foreign_keys=lambda: [Assunto.__table__.c.user_id])
+
+    def __repr__(self):
+        return f'<Assunto {self.client.name} - {self.nome_assunto}>'
+
+class Tarefa(db.Model):
+    __tablename__ = 'tarefas'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    assunto_id = db.Column(db.Integer, db.ForeignKey('assuntos.id'), nullable=False)
+    nome_tarefa = db.Column(db.String(100), nullable=False)
+    descricao = db.Column(db.String(200), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    sort_order = db.Column(db.Integer, default=0)
+    is_completed = db.Column(db.Boolean, default=False)
+    horas = db.Column(db.Float, default=0.0)
+    is_billed = db.Column(db.Boolean, default=False)
+    data_conclusao = db.Column(db.Date, nullable=True)
+    completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    user = db.relationship("User", backref="tarefas_criadas", foreign_keys=lambda: [Tarefa.__table__.c.user_id])
+
+    def __repr__(self):
+        return f'<Tarefa {self.nome_tarefa} (Assunto: {self.assunto.nome_assunto if self.assunto else "N/A"})>'
+
+
+class PrazoJudicial(db.Model):
+    __tablename__ = 'prazos_judiciais'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    assunto = db.Column(db.String(100), nullable=False)
+    processo = db.Column(db.String(100), nullable=False)
+    prazo = db.Column(db.Date, nullable=True)
+    comentarios = db.Column(db.Text, nullable=True)
+    status = db.Column(db.Boolean, default=False)
+    horas = db.Column(db.Float, default=0.0)
+    is_billed = db.Column(db.Boolean, default=False)
+    data_conclusao = db.Column(db.Date, nullable=True)
+    completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    client = db.relationship('Client', backref='prazos_judiciais')
+    
+    shared_with = db.relationship(
+        'User',
+        secondary=shared_prazos,
+        backref=db.backref('shared_prazos', lazy='dynamic', overlaps="prazos_compartilhados,compartilhados"),
+        lazy='dynamic',
+        overlaps="prazos_compartilhados,compartilhados"
+    )
+
+    user = db.relationship("User", backref="prazos_criados", foreign_keys=lambda: [PrazoJudicial.__table__.c.user_id])
+
+    def __repr__(self):
+        return f'<PrazoJudicial {self.client.name} - {self.assunto}>'
+
+# Hour Entry
+class HourEntry(db.Model):
+    __tablename__ = 'hour_entries'
+    id = db.Column(db.Integer, primary_key=True)
+    object_type = db.Column(db.String(20), nullable=False)  # 'tarefa' ou 'prazo'
+    object_id = db.Column(db.Integer, nullable=False)
+    hours = db.Column(db.Float, nullable=False)
+    entry_date = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<HourEntry {self.object_type}:{self.object_id} - {self.hours}h em {self.entry_date}>'
+
+class HoraAdicao(db.Model):
+    __tablename__ = 'horas_adicao'
+    id = db.Column(db.Integer, primary_key=True)
+    item_type = db.Column(db.String(20), nullable=False)  # 'assunto', 'tarefa' ou 'prazo'
+    item_id = db.Column(db.Integer, nullable=False)
+    horas_adicionadas = db.Column(db.Float, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/forms.py --
+class AssuntoForm(FlaskForm):
+    client_existing = QuerySelectField(
+        'Cliente Existente',
+        query_factory=user_clients_query,  # Filtra clientes do usuário logado
+        get_label='name',
+        allow_blank=True,
+        blank_text="-- Selecione um cliente --",
+        validators=[Optional()]
+    )
+    client_new = StringField(
+        'Novo Cliente (caso não haja existente)',
+        validators=[Optional()]
+    )
+    nome_assunto = StringField('Assunto', validators=[DataRequired()])
+    due_date = DateField('Data do Assunto', validators=[Optional()], format='%Y-%m-%d')
+    sort_order = IntegerField('Ordem', validators=[Optional()])
+    # Campo para seleção de usuários para partilha
+    shared_with = QuerySelectMultipleField(
+        'Compartilhar com',
+        query_factory=usuarios_query,
+        get_label='nickname',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Salvar Assunto')
+
+    def validate(self, extra_validators=None):
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if (not self.client_existing.data) and (not self.client_new.data or not self.client_new.data.strip()):
+            msg = 'Por favor, selecione um cliente existente ou informe um novo cliente.'
+            self.client_existing.errors.append(msg)
+            self.client_new.errors.append(msg)
+            return False
+        return True
+
+class ConcluirAssuntoForm(FlaskForm):
+    horas = FloatField('Horas ao Concluir', validators=[Optional()])
+    submit = SubmitField('Concluir Assunto')
+
+class TarefaForm(FlaskForm):
+    nome_tarefa = StringField('Nome da Tarefa', validators=[DataRequired()])
+    descricao = StringField('Descrição (opcional)', validators=[Optional()])
+    due_date = DateField('Data da Tarefa', validators=[Optional()], format='%Y-%m-%d')
+    sort_order = IntegerField('Ordem', validators=[Optional()])
+    horas = FloatField('Horas (opcional)', validators=[Optional()])
+    
+    submit = SubmitField('Salvar Tarefa')
+
+class PrazoJudicialForm(FlaskForm):
+    client_existing = QuerySelectField(
+        'Cliente Existente',
+        query_factory=user_clients_query,  # Filtra clientes do usuário logado
+        get_label='name',
+        allow_blank=True,
+        blank_text="-- Selecione um cliente --",
+        validators=[Optional()]
+    )
+    client_new = StringField(
+        'Novo Cliente (caso não haja existente)',
+        validators=[Optional()]
+    )
+    assunto = StringField('Assunto', validators=[DataRequired()])
+    processo = StringField('Processo', validators=[DataRequired()])
+    prazo = DateField('Prazo', validators=[Optional()], format='%Y-%m-%d')
+    comentarios = TextAreaField('Comentários', validators=[Optional()])
+    horas = FloatField('Horas', validators=[Optional()])
+    shared_with = QuerySelectMultipleField(
+        'Compartilhar com',
+        query_factory=usuarios_query,
+        get_label='nickname',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Salvar Prazo')
+
+    def validate(self, extra_validators=None):
+        if not super().validate(extra_validators=extra_validators):
+            return False
+        if not self.client_existing.data and (not self.client_new.data or not self.client_new.data.strip()):
+            msg = 'Por favor, selecione um cliente existente ou informe um novo cliente.'
+            self.client_existing.errors.append(msg)
+            self.client_new.errors.append(msg)
+            return False
+        return True
+
+class ShareForm(FlaskForm):
+    shared_with = QuerySelectMultipleField(
+        'Compartilhar com',
+        query_factory=usuarios_query,
+        get_label='nickname',
+        validators=[Optional()]
+    )
+    submit = SubmitField('Atualizar Compartilhamento')
+
+--------------------------------------------------------------------------------
+
