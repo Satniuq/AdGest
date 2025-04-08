@@ -17,10 +17,12 @@ from flask_login import login_user, logout_user, login_required, current_user
 
 # Módulos do projeto
 from app.forms import (RegistrationForm, LoginForm, AssuntoForm, TarefaForm, 
-                       PrazoJudicialForm, ClientForm, ShareForm)
+                       PrazoJudicialForm, ClientForm, ShareForm, CommentForm)
 from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         NotaHonorarios, ClientShare, shared_assuntos,
-                        shared_prazos, HoraAdicao, DocumentoContabilistico, Notification)
+                        shared_prazos, HoraAdicao, DocumentoContabilistico,
+                        Notification, AssuntoHistory, TarefaHistory, PrazoHistory,
+                        Comment)
 from app.decorators import admin_required
 from app.decorators import handle_db_errors
 #END FROM
@@ -185,6 +187,22 @@ def create_assunto():
             )
             db.session.add(novo)
             db.session.commit()
+
+            # LOG de histórico
+            hist = AssuntoHistory(
+                assunto_id=novo.id,
+                change_type='created',
+                changed_at=datetime.utcnow(),
+                changed_by=current_user.id,
+                snapshot=json.dumps({
+                    'nome_assunto': novo.nome_assunto,
+                    'due_date': str(novo.due_date) if novo.due_date else None,
+                    'sort_order': novo.sort_order
+                    # inclua o que julgar útil
+                })
+            )
+            db.session.add(hist)
+            db.session.commit()
             flash('Assunto criado com sucesso!', 'success')
             return redirect(url_for('main.dashboard'))
         except IntegrityError as e:
@@ -208,8 +226,18 @@ def edit_assunto(assunto_id):
     form = AssuntoForm(obj=assunto)
     form.client_existing.query = Client.query
     form.client_existing.data = assunto.client
+
     if form.validate_on_submit():
         try:
+            # Capture os dados antigos
+            old_data = {
+                'nome_assunto': assunto.nome_assunto,
+                'due_date': assunto.due_date.isoformat() if assunto.due_date else None,
+                'sort_order': assunto.sort_order,
+                'client_id': assunto.client_id
+            }
+            
+            # Atualiza os dados
             assunto.nome_assunto = form.nome_assunto.data
             assunto.due_date = form.due_date.data
             assunto.sort_order = form.sort_order.data or 0
@@ -224,9 +252,34 @@ def edit_assunto(assunto_id):
                 db.session.commit()
                 assunto.client_id = new_client.id
             db.session.commit()
-            flash('Assunto atualizado com sucesso!', 'success')
-
-            # Define os usuários envolvidos: criador + usuários compartilhados
+            
+            # Capture os dados novos
+            new_data = {
+                'nome_assunto': assunto.nome_assunto,
+                'due_date': assunto.due_date.isoformat() if assunto.due_date else None,
+                'sort_order': assunto.sort_order,
+                'client_id': assunto.client_id
+            }
+            
+            # Calcule as diferenças
+            diff = {}
+            for key in old_data:
+                if old_data[key] != new_data[key]:
+                    diff[key] = {'old': old_data[key], 'new': new_data[key]}
+            
+            # Registre o histórico, se houver diferenças
+            if diff:
+                import json
+                hist = AssuntoHistory(
+                    assunto_id=assunto.id,
+                    change_type='editado',
+                    changed_by=current_user.id,
+                    snapshot=json.dumps(diff)
+                )
+                db.session.add(hist)
+                db.session.commit()
+            
+            # Notificações para os envolvidos
             envolvidos = set()
             envolvidos.add(assunto.user)
             envolvidos.update(assunto.shared_with)
@@ -235,11 +288,15 @@ def edit_assunto(assunto_id):
                     mensagem = f"{current_user.nickname} editou o assunto '{assunto.nome_assunto}'."
                     link = url_for('main.assunto_info', assunto_id=assunto.id) if 'assunto_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
                     criar_notificacao(user.id, "update", mensagem, link)
+            
+            flash('Assunto atualizado com sucesso e histórico registrado!', 'success')
             return redirect(url_for('main.dashboard'))
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f'Erro ao atualizar assunto: {str(e)}')
             flash(f'Erro ao atualizar assunto: {str(e)}', 'danger')
+            return render_template('edit_assunto.html', form=form, assunto=assunto)
+    
     return render_template('edit_assunto.html', form=form, assunto=assunto)
 
 
@@ -327,8 +384,26 @@ def create_tarefa(assunto_id):
             )
             db.session.add(nova)
             db.session.commit()
-            flash('Tarefa criada com sucesso!', 'success')
 
+            # Registra o histórico da criação
+            hist = TarefaHistory(
+                tarefa_id=nova.id,
+                change_type='criada',
+                changed_at=datetime.utcnow(),
+                changed_by=current_user.id,
+                snapshot=json.dumps({
+                    'nome_tarefa': nova.nome_tarefa,
+                    'descricao': nova.descricao,
+                    'due_date': str(nova.due_date) if nova.due_date else None,
+                    'sort_order': nova.sort_order,
+                    'horas': nova.horas,
+                    'is_completed': nova.is_completed
+                })
+            )
+            db.session.add(hist)
+            db.session.commit()
+
+            flash('Tarefa criada com sucesso!', 'success')
             # Define o conjunto de usuários envolvidos:
             # Inclui o criador do assunto e todos os usuários compartilhados.
             envolvidos = set()
@@ -357,15 +432,54 @@ def edit_tarefa(tarefa_id):
     form = TarefaForm(obj=tarefa)
     if form.validate_on_submit():
         try:
+            # Captura os dados antigos
+            old_data = {
+                'nome_tarefa': tarefa.nome_tarefa,
+                'descricao': tarefa.descricao,
+                'due_date': tarefa.due_date.isoformat() if tarefa.due_date else None,
+                'sort_order': tarefa.sort_order,
+                'horas': tarefa.horas,
+                'is_completed': tarefa.is_completed
+            }
+            
+            # Atualiza os dados
             tarefa.nome_tarefa = form.nome_tarefa.data
             tarefa.descricao = form.descricao.data
             tarefa.due_date = form.due_date.data
             tarefa.sort_order = form.sort_order.data or 0
             tarefa.horas = form.horas.data or 0.0
             db.session.commit()
+            
+            # Captura os dados novos e calcula as diferenças
+            new_data = {
+                'nome_tarefa': tarefa.nome_tarefa,
+                'descricao': tarefa.descricao,
+                'due_date': tarefa.due_date.isoformat() if tarefa.due_date else None,
+                'sort_order': tarefa.sort_order,
+                'horas': tarefa.horas,
+                'is_completed': tarefa.is_completed
+            }
+            
+            diff = {}
+            for key in old_data:
+                if old_data[key] != new_data[key]:
+                    diff[key] = {'old': old_data[key], 'new': new_data[key]}
+            
+            # Registra o histórico se houver alterações
+            if diff:
+                hist = TarefaHistory(
+                    tarefa_id=tarefa.id,
+                    change_type='editada',
+                    changed_at=datetime.utcnow(),
+                    changed_by=current_user.id,
+                    snapshot=json.dumps(diff)
+                )
+                db.session.add(hist)
+                db.session.commit()
+            
             flash('Tarefa atualizada com sucesso!', 'success')
             
-            # Define os usuários envolvidos: criador da tarefa e usuários compartilhados do assunto
+            # Notifica os usuários envolvidos
             envolvidos = set()
             envolvidos.add(tarefa.user)
             envolvidos.update(tarefa.assunto.shared_with)
@@ -420,8 +534,19 @@ def add_hours_tarefa(tarefa_id):
         )
         db.session.add(registro)
         db.session.commit()
+
+        # Registra no histórico que horas foram adicionadas
+        hist = TarefaHistory(
+            tarefa_id=tarefa.id,
+            change_type='horas_adicionadas',
+            changed_at=datetime.utcnow(),
+            changed_by=current_user.id,
+            snapshot=json.dumps({'horas_adicionadas': horas, 'total_horas': tarefa.horas})
+        )
+        db.session.add(hist)
+        db.session.commit()
+
         flash("Horas adicionadas com sucesso!", "success")
-        
         # Cria um conjunto para unificar os usuários a serem notificados
         notificados = set()
         # Adiciona os usuários compartilhados no assunto
@@ -462,8 +587,19 @@ def toggle_status_tarefa(tarefa_id):
             tarefa.completed_by = None
             acao = "reaberta"
         db.session.commit()
+
+        # Registra a mudança de status no histórico
+        hist = TarefaHistory(
+            tarefa_id=tarefa.id,
+            change_type='status_alterado',
+            changed_at=datetime.utcnow(),
+            changed_by=current_user.id,
+            snapshot=json.dumps({'novo_status': acao})
+        )
+        db.session.add(hist)
+        db.session.commit()
+
         flash('Status da tarefa atualizado!', 'success')
-        
         notificados = set()
         # Adiciona os usuários compartilhados do assunto
         assunto_users = tarefa.assunto.shared_with.all() if hasattr(tarefa.assunto.shared_with, 'all') else tarefa.assunto.shared_with
@@ -537,12 +673,23 @@ def create_prazo():
 @login_required
 def edit_prazo(prazo_id):
     prazo = PrazoJudicial.query.get_or_404(prazo_id)
-    old_shared = list(prazo.shared_with)  # Se necessário para comparação ou para notificações
+    old_shared = list(prazo.shared_with)  # Se necessário para comparação ou notificações
     form = PrazoJudicialForm(obj=prazo)
     form.client_existing.query = Client.query
     form.client_existing.data = prazo.client
     if form.validate_on_submit():
         try:
+            # Capture os dados antigos
+            old_data = {
+                'assunto': prazo.assunto,
+                'processo': prazo.processo,
+                'prazo': prazo.prazo.isoformat() if prazo.prazo else None,
+                'comentarios': prazo.comentarios,
+                'horas': prazo.horas,
+                'client_id': prazo.client_id,
+            }
+            
+            # Atualiza os dados
             if form.client_existing.data:
                 prazo.client_id = form.client_existing.data.id
             else:
@@ -574,7 +721,34 @@ def edit_prazo(prazo_id):
             db.session.commit()
             flash('Prazo atualizado com sucesso!', 'success')
 
-            # Notifica todos os envolvidos: criador + todos os usuários compartilhados
+            # Capture os dados novos
+            new_data = {
+                'assunto': prazo.assunto,
+                'processo': prazo.processo,
+                'prazo': prazo.prazo.isoformat() if prazo.prazo else None,
+                'comentarios': prazo.comentarios,
+                'horas': prazo.horas,
+                'client_id': prazo.client_id,
+            }
+            
+            # Calcule as diferenças e registre no histórico, se houver alterações
+            diff = {}
+            for key in old_data:
+                if old_data[key] != new_data[key]:
+                    diff[key] = {'old': old_data[key], 'new': new_data[key]}
+            
+            if diff:
+                import json
+                hist = PrazoHistory(
+                    prazo_id=prazo.id,
+                    change_type='editado',
+                    changed_by=current_user.id,
+                    snapshot=json.dumps(diff)
+                )
+                db.session.add(hist)
+                db.session.commit()
+            
+            # Notifica todos os envolvidos: criador + usuários compartilhados
             envolvidos = set()
             envolvidos.add(prazo.user)
             envolvidos.update(prazo.shared_with)
@@ -618,7 +792,6 @@ def delete_prazo(prazo_id):
         flash(f'Erro ao excluir prazo: {str(e)}', 'danger')
     return redirect(url_for('main.dashboard'))
 
-
 @main.route('/prazo/add_hours/<int:prazo_id>', methods=['POST'])
 @login_required
 def add_hours_prazo(prazo_id):
@@ -626,6 +799,7 @@ def add_hours_prazo(prazo_id):
     try:
         horas = float(request.form.get('horas', 0))
         prazo.horas += horas
+        
         registro = HoraAdicao(
             item_type='prazo',
             item_id=prazo.id,
@@ -636,23 +810,30 @@ def add_hours_prazo(prazo_id):
         db.session.commit()
         flash("Horas adicionadas com sucesso!", "success")
         
-        # Cria um conjunto para unificar os usuários a serem notificados
+        # Notifica os envolvidos
         notificados = set()
-        # Adiciona os usuários explicitamente compartilhados no prazo
         prazo_users = prazo.shared_with.all() if hasattr(prazo.shared_with, 'all') else prazo.shared_with
         for user in prazo_users:
             notificados.add(user)
-        # Inclui o criador do prazo (ADM) mesmo que não esteja na lista de compartilhamento
         if prazo.user_id != current_user.id:
             notificados.add(prazo.user)
-        
-        # Remove o usuário que está adicionando as horas (ADV)
         notificados = [user for user in notificados if user.id != current_user.id]
-        
         for user in notificados:
             mensagem = f"{current_user.nickname} adicionou {horas}h ao prazo '{prazo.assunto}' (Processo: {prazo.processo})."
             link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
             criar_notificacao(user.id, "update", mensagem, link)
+        
+        # Registra o histórico da adição de horas
+        import json
+        diff = {'horas': {'old': prazo.horas - horas, 'new': prazo.horas}}
+        hist = PrazoHistory(
+            prazo_id=prazo.id,
+            change_type='horas_adicionadas',
+            changed_by=current_user.id,
+            snapshot=json.dumps(diff)
+        )
+        db.session.add(hist)
+        db.session.commit()
                 
     except Exception as e:
         db.session.rollback()
@@ -676,20 +857,29 @@ def toggle_status_prazo(prazo_id):
         db.session.commit()
         flash('Status do prazo atualizado!', 'success')
         
-        # Unir usuários a notificar: usuários compartilhados no prazo e o dono do prazo
+        # Notifica os envolvidos: usuários compartilhados e o criador
         notificados = set()
         prazo_users = prazo.shared_with.all() if hasattr(prazo.shared_with, 'all') else prazo.shared_with
         for user in prazo_users:
             notificados.add(user)
-        # Adiciona o criador do prazo
         notificados.add(prazo.user)
-        # Remove o usuário atual
         notificados = [user for user in notificados if user.id != current_user.id]
-        
         for user in notificados:
             mensagem = f"{current_user.nickname} marcou o prazo '{prazo.assunto}' como {acao}."
             link = url_for('main.prazo_info', prazo_id=prazo.id) if 'prazo_info' in current_app.jinja_env.list_templates() else url_for('main.dashboard')
             criar_notificacao(user.id, "update", mensagem, link)
+        
+        # Registra o histórico da alteração de status
+        import json
+        diff = {'status': {'old': not prazo.status, 'new': prazo.status}}
+        hist = PrazoHistory(
+            prazo_id=prazo.id,
+            change_type='status_alterado',
+            changed_by=current_user.id,
+            snapshot=json.dumps(diff)
+        )
+        db.session.add(hist)
+        db.session.commit()
             
     except Exception as e:
         db.session.rollback()
@@ -781,6 +971,175 @@ def update_assuntos_order():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 #END ROTAS ASSUNTOS, TAREFAS E PRAZOS
+
+#BEGIN ROTAS PARA HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS
+@main.route('/history/assunto/<int:assunto_id>')
+@login_required
+def history_assunto(assunto_id):
+    assunto = Assunto.query.get_or_404(assunto_id)
+    
+    assunto_history = []  # Não estamos utilizando o histórico do assunto
+
+    # Calcula o total de horas de todas as tarefas associadas
+    total_horas = sum([t.horas for t in assunto.tarefas.all()])
+
+    # Histórico das tarefas associadas
+    tasks_history = {}
+    for tarefa in assunto.tarefas.all():
+        tarefa_history = TarefaHistory.query.filter_by(tarefa_id=tarefa.id)\
+                                            .order_by(TarefaHistory.changed_at.desc())\
+                                            .all()
+        tasks_history[tarefa.id] = tarefa_history
+
+    # Comentários associados
+    comments = Comment.query.filter_by(object_type='assunto', object_id=assunto_id)\
+                            .order_by(Comment.created_at.desc())\
+                            .all()
+    # Instancia o formulário de comentário
+    form = CommentForm()
+    
+    # Coleta os IDs dos usuários que alteraram as tarefas (para exibir os nicknames)
+    user_ids = set()
+    for t_hist_list in tasks_history.values():
+        for hist in t_hist_list:
+            user_ids.add(hist.changed_by)
+    
+    from app.models import User
+    users = User.query.filter(User.id.in_(list(user_ids))).all()
+    user_dict = {user.id: user for user in users}
+    
+    # Calcula o último update dentre as tarefas associadas
+    last_update = None
+    last_update_user_id = None
+    for tarefa in assunto.tarefas.all():
+        for hist in tasks_history.get(tarefa.id, []):
+            if last_update is None or hist.changed_at > last_update:
+                last_update = hist.changed_at
+                last_update_user_id = hist.changed_by
+    
+    return render_template('history_assunto.html',
+                           assunto=assunto,
+                           history_entries=assunto_history,
+                           tasks_history=tasks_history,
+                           comments=comments,
+                           form=form,
+                           user_dict=user_dict,
+                           total_horas=total_horas,
+                           last_update=last_update,
+                           last_update_user_id=last_update_user_id)
+
+
+@main.route('/history/prazo/<int:prazo_id>')
+@login_required
+def history_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    
+    # Opcional: se houver histórico específico do prazo, pode ser carregado aqui
+    # Para simplificar, vamos assumir que usaremos apenas informações registradas no próprio PrazoJudicial
+    # Ou se houver PrazoHistory:
+    prazo_history = PrazoHistory.query.filter_by(prazo_id=prazo.id)\
+                                      .order_by(PrazoHistory.changed_at.desc())\
+                                      .all()
+    
+    # Calcula o "total de horas" – pode ser o valor armazenado em prazo.horas
+    total_horas = prazo.horas
+    
+    # Comentários associados ao prazo
+    comments = Comment.query.filter_by(object_type='prazo', object_id=prazo.id)\
+                            .order_by(Comment.created_at.desc())\
+                            .all()
+    form = CommentForm()
+    
+    # Coleta IDs dos usuários envolvidos no histórico (se houver)
+    user_ids = set()
+    for hist in prazo_history:
+        user_ids.add(hist.changed_by)
+    from app.models import User
+    users = User.query.filter(User.id.in_(list(user_ids))).all()
+    user_dict = { user.id: user for user in users }
+    
+    # Se desejar calcular o último update, de forma semelhante aos assuntos:
+    last_update = None
+    last_update_user_id = None
+    for hist in prazo_history:
+        if last_update is None or hist.changed_at > last_update:
+            last_update = hist.changed_at
+            last_update_user_id = hist.changed_by
+    
+    return render_template('history_prazo.html',
+                           prazo=prazo,
+                           prazo_history=prazo_history,
+                           comments=comments,
+                           form=form,
+                           user_dict=user_dict,
+                           total_horas=total_horas,
+                           last_update=last_update,
+                           last_update_user_id=last_update_user_id)
+
+@main.route('/add_comment', methods=['POST'])
+@login_required
+def add_comment():
+    object_type = request.form.get('object_type')
+    object_id = request.form.get('object_id')
+    comment_text = request.form.get('comment_text')
+    if object_type and object_id and comment_text:
+        comment = Comment(
+            object_type=object_type,
+            object_id=int(object_id),
+            user_id=current_user.id,
+            comment_text=comment_text
+        )
+        db.session.add(comment)
+        db.session.commit()
+        flash("Comentário adicionado.", "success")
+        # Envia notificação para os usuários envolvidos conforme o tipo do objeto
+        if object_type == 'assunto':
+            # Carrega o assunto
+            assunto = Assunto.query.get_or_404(object_id)
+
+            # Identifica os usuários envolvidos: criador e os compartilhados
+            compartilhados = list(assunto.shared_with)
+            envolvidos = set([assunto.user])
+            envolvidos.update(compartilhados)
+            
+            # Remove o usuário que fez o comentário
+            envolvidos = [user for user in envolvidos if user.id != current_user.id]
+            
+            # Define a mensagem e o link (p. ex., para a página de histórico do assunto)
+            mensagem = f"{current_user.nickname} adicionou um comentário no assunto '{assunto.nome_assunto}'."
+            link = url_for('main.history_assunto', assunto_id=assunto.id)
+            for user in envolvidos:
+                criar_notificacao(user.id, "update", mensagem, link)
+        
+        elif object_type == 'prazo':
+            # Carrega o prazo
+            prazo = PrazoJudicial.query.get_or_404(object_id)
+
+            # Identifica os usuários envolvidos: criador e os compartilhados do prazo
+            compartilhados = list(prazo.shared_with)
+            envolvidos = set([prazo.user])
+            envolvidos.update(compartilhados)
+            
+            # Remove o usuário que comentou
+            envolvidos = [user for user in envolvidos if user.id != current_user.id]
+            
+            # Define a mensagem e o link para o histórico do prazo
+            mensagem = f"{current_user.nickname} adicionou um comentário no prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+            link = url_for('main.history_prazo', prazo_id=prazo.id)
+            for user in envolvidos:
+                criar_notificacao(user.id, "update", mensagem, link)
+    else: 
+        flash("Preencha todos os dados.", "danger")
+    
+    # Redireciona de volta para a página de histórico de acordo com o objeto
+    if object_type == 'assunto':
+        return redirect(url_for('main.history_assunto', assunto_id=object_id))
+    elif object_type == 'prazo':
+        return redirect(url_for('main.history_prazo', prazo_id=object_id))
+    return redirect(url_for('main.dashboard'))
+
+
+#END ROTAS PARA HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS
 
 #BEGIN ROTAS CLIENTES
 ### ROTAS PARA CLIENTES E HISTÓRICO ###

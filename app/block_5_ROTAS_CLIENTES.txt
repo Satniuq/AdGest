@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTAS CLIENTES (Linhas 772 a 1139)
+Bloco: ROTAS CLIENTES (Linhas 847 a 1214)
 ================================================================================
 
 ### ROTAS PARA CLIENTES E HISTÓRICO ###

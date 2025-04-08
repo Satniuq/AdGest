@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Histórico do Assunto: {{ assunto.nome_assunto }}{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <div class="row">
+    <!-- Coluna da Esquerda: Informações e Histórico das Tarefas -->
+    <div class="col-md-8">
+      <h2>Histórico do Assunto: {{ assunto.nome_assunto }}</h2>
+
+      <!-- Informações do Assunto em Linha -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <p>
+            <strong>Cliente:</strong> {{ assunto.client.name }} |
+            <strong>Criado em:</strong> {{ assunto.created_at.strftime('%d/%m/%Y %H:%M') if assunto.created_at else 'N/A' }} |
+            <strong>Por:</strong> {{ assunto.user.nickname }} |
+            <strong>Última Atualização:</strong>
+            {% if last_update %}
+              {{ last_update.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              N/A
+            {% endif %} |
+            <strong>Por:</strong>
+            {% if last_update and last_update_user_id in user_dict %}
+              {{ user_dict[last_update_user_id].nickname }}
+            {% else %}
+              N/A
+            {% endif %} |
+            <strong>Status:</strong> {% if assunto.is_completed %}Concluído{% else %}Aberto{% endif %} |
+            <strong>Total Horas:</strong> {{ total_horas }}
+          </p>
+        </div>
+      </div>
+
+
+      <!-- Histórico das Tarefas Associadas -->
+      <div class="mb-3">
+        <h3>Histórico das Tarefas Associadas</h3>
+        {% if assunto.tarefas.count() > 0 %}
+          {% for tarefa in assunto.tarefas.all() %}
+            <div class="card mb-2">
+              <div class="card-header">
+                Tarefa: {{ tarefa.nome_tarefa }}
+              </div>
+              <div class="card-body">
+                <p>
+                  <strong>Horas:</strong> {{ tarefa.horas }}h | 
+                  <strong>Status:</strong> {% if tarefa.is_completed %}Concluída{% else %}Aberta{% endif %} | 
+                  <strong>Criada em:</strong> {% if tarefa.created_at %}{{ tarefa.created_at.strftime('%d/%m/%Y %H:%M') }}{% else %}N/A{% endif %}
+                </p>
+                
+                <!-- BOTÃO QUE MOSTRA/ESCONDE O HISTÓRICO DA TAREFA -->
+                <button class="btn btn-secondary" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#hist-tarefa-{{ tarefa.id }}"
+                        aria-expanded="false"
+                        aria-controls="hist-tarefa-{{ tarefa.id }}">
+                  Ver Histórico
+                </button>
+                
+                <!-- Conteúdo Collapsado: Histórico da Tarefa -->
+                <div class="collapse mt-3" id="hist-tarefa-{{ tarefa.id }}">
+                  {% set tarefa_hist = tasks_history[tarefa.id] %}
+                  {% if tarefa_hist %}
+                    <h5>Histórico da Tarefa</h5>
+                    <ul class="list-group">
+                      {% for hist in tarefa_hist %}
+                        <li class="list-group-item">
+                          <strong>{{ hist.change_type|capitalize }}</strong>
+                          em {{ hist.changed_at.strftime('%d/%m/%Y %H:%M') }}
+                          por usuário {{ user_dict[hist.changed_by].nickname if hist.changed_by in user_dict else 'Desconhecido' }}
+                          {% if hist.snapshot %}
+                            <div class="mt-2">
+                              <small>Detalhes:</small>
+                              {{ hist.snapshot | render_snapshot }}
+                            </div>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="text-muted">Sem histórico para esta tarefa.</p>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- Coluna da Direita: Formulário + Comentários no mesmo card -->
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          Comentário
+        </div>
+        <div class="card-body">
+          <!-- Formulário de Comentário -->
+          <form action="{{ url_for('main.add_comment') }}" method="POST">
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="object_type" value="assunto">
+            <input type="hidden" name="object_id" value="{{ assunto.id }}">
+            <div class="mb-3">
+              {{ form.comment_text.label(class="form-label") }}
+              {{ form.comment_text(rows=3, class="form-control") }}
+            </div>
+            <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+          </form>
+        </div>
+
+        {% if comments %}
+        <!-- Linha divisória e seção para os comentários -->
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <ul class="list-group list-group-flush">
+            {% for comment in comments %}
+              <li class="list-group-item">
+                {{ comment.user.nickname }} 
+                | {{ comment.created_at.strftime('%d/%m/%Y %H:%M') }} 
+                | {{ comment.comment_text }}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <!-- Se não houver comentários, pode exibir algo enxuto ou simplesmente omitir esse bloco -->
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <p class="text-muted">Nenhum comentário registrado.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- Fim da row -->
+</div><!-- Fim da container -->
+{% endblock %}

@@ -79,6 +79,8 @@ class Assunto(db.Model):
     is_completed = db.Column(db.Boolean, default=False)
     is_billed = db.Column(db.Boolean, default=False)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     tarefas = db.relationship('Tarefa', backref='assunto', cascade="all, delete-orphan", lazy='dynamic')
     shared_with = db.relationship(
@@ -111,6 +113,8 @@ class Tarefa(db.Model):
     is_billed = db.Column(db.Boolean, default=False)
     data_conclusao = db.Column(db.Date, nullable=True)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     user = db.relationship("User", backref="tarefas_criadas", foreign_keys=lambda: [Tarefa.__table__.c.user_id])
 
@@ -163,6 +167,59 @@ class HourEntry(db.Model):
     def __repr__(self):
         return f'<HourEntry {self.object_type}:{self.object_id} - {self.hours}h em {self.entry_date}>'
 #END MODEL HOUR ENTRY - TAREFAS, PRAZOS
+
+#BEGIN MODEL HISTÓRICO DE CARDS DE ASSUNTOS, TAREFAS, PRAZOS
+class AssuntoHistory(db.Model):
+    __tablename__ = 'assuntos_history'
+    id = db.Column(db.Integer, primary_key=True)
+    assunto_id = db.Column(db.Integer, nullable=False)  # FK para o assunto original
+    change_type = db.Column(db.String(20))  # 'created', 'updated', 'deleted'
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    # Armazene as mudanças – pode ser um JSON com um snapshot ou somente os campos alterados
+    snapshot = db.Column(db.JSON)  # Requer que seu banco suporte JSON
+
+    def __repr__(self):
+        return f"<Histórico Assunto {self.assunto_id} {self.change_type} em {self.changed_at}>"
+
+class TarefaHistory(db.Model):
+    __tablename__ = 'tarefas_history'
+    id = db.Column(db.Integer, primary_key=True)
+    tarefa_id = db.Column(db.Integer, nullable=False)  # FK para a tarefa
+    change_type = db.Column(db.String(20), nullable=False)  # ex.: 'created', 'edited'
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    snapshot = db.Column(db.JSON)  # ou db.Column(db.Text)
+
+    def __repr__(self):
+        return f"<TarefaHistory {self.tarefa_id} {self.change_type} em {self.changed_at}>"
+
+class PrazoHistory(db.Model):
+    __tablename__ = 'prazos_history'
+    id = db.Column(db.Integer, primary_key=True)
+    prazo_id = db.Column(db.Integer, nullable=False)  # FK para o prazo original
+    change_type = db.Column(db.String(20))  # 'criado', 'editado', 'excluído', etc.
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    snapshot = db.Column(db.JSON)  # Armazene as mudanças como JSON
+
+    def __repr__(self):
+        return f"<PrazoHistory {self.prazo_id} {self.change_type} em {self.changed_at}>"
+
+class Comment(db.Model):
+    __tablename__ = 'comments'
+    id = db.Column(db.Integer, primary_key=True)
+    object_type = db.Column(db.String(50))  # 'assunto', 'tarefa' ou 'prazo'
+    object_id = db.Column(db.Integer, nullable=False)  # ID do assunto/tarefa/prazo
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    comment_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='comments')
+
+    def __repr__(self):
+        return f"<Comment {self.id} em {self.object_type}:{self.object_id}>"
+#END MODEL HISTÓRICO DE CARDS DE ASSUNTOS, TAREFAS, PRAZOS
 
 #BEGIN MODEL CLIENTE
 class Client(db.Model):

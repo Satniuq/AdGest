@@ -16,7 +16,7 @@ GROUP_MAPPING = {
     "billing": ["billing", "nota", "honorario"],
     "clientes": ["client", "cliente", "clientes", "partilhar_client"],
     "contabilidade": ["contabil", "accounting", "invoice", "documento", "invoices"],
-    "assuntos": ["assunto", "tarefa", "prazo", "dashboard"],
+    "assuntos": ["assunto", "tarefa", "prazo", "dashboard", "assuntos", "tarefas", "prazos"],
     "notifications": ["notification", "notific"]
 }
 
