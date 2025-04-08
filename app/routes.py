@@ -103,30 +103,41 @@ def index():
 #END ROTA INDEX
 
 #BEGIN ROTAS ASSUNTOS, TAREFAS E PRAZOS
+
 @main.route('/dashboard')
 @login_required
 def dashboard():
-    assuntos = Assunto.query.filter(
+    # Carrega TODOS os assuntos do usuário ou compartilhados
+    all_assuntos = Assunto.query.filter(
         or_(
             Assunto.user_id == current_user.id,
             Assunto.shared_with.any(id=current_user.id)
-        ),
-        Assunto.is_completed == False
+        )
     ).order_by(Assunto.sort_order, Assunto.nome_assunto).all()
 
-    # Cria um dicionário para as tarefas visíveis para o usuário em cada assunto
+    # Filtra para exibir:
+    # - Assuntos que não estão concluídos (is_completed == False)
+    # ou
+    # - Assuntos concluídos mas que possuem pelo menos uma tarefa que não está concluída
+    assuntos = []
+    for assunto in all_assuntos:
+        if not assunto.is_completed:
+            assuntos.append(assunto)
+        else:
+            # Se estiver concluído, verifica se existe pelo menos uma tarefa aberta
+            if any(not tarefa.is_completed for tarefa in assunto.tarefas):
+                assuntos.append(assunto)
+
+    # Cria o dicionário para as tarefas visíveis para cada assunto
     assuntos_tarefas_visiveis = {}
     for assunto in assuntos:
-        # Se o assunto está compartilhado, todas as tarefas são visíveis
         if assunto.shared_with.count() > 0:
             tarefas_visiveis = assunto.tarefas
         else:
-            # Caso contrário, exibe somente as tarefas criadas pelo usuário
             tarefas_visiveis = [tarefa for tarefa in assunto.tarefas if tarefa.user_id == current_user.id]
         assuntos_tarefas_visiveis[assunto.id] = tarefas_visiveis
 
-    current_date = date.today()
-    tomorrow_date = current_date + timedelta(days=1)
+    # Busca prazos pendentes (de acordo com sua lógica já existente)
     prazos = PrazoJudicial.query.filter(
         or_(
             PrazoJudicial.user_id == current_user.id,
@@ -134,6 +145,9 @@ def dashboard():
         ),
         PrazoJudicial.status == False
     ).order_by(PrazoJudicial.prazo).all()
+
+    current_date = date.today()
+    tomorrow_date = current_date + timedelta(days=1)
 
     return render_template(
         'dashboard.html',
@@ -143,7 +157,6 @@ def dashboard():
         current_date=current_date,
         tomorrow_date=tomorrow_date
     )
-
 
 ### ROTAS PARA ASSUNTOS, TAREFAS E PRAZOS (já existentes) ###
 @main.route('/assunto/create', methods=['GET', 'POST'])
@@ -1355,38 +1368,106 @@ def billing_cliente(client_id):
 @main.route('/billing/revert/<string:item_type>/<int:item_id>', methods=['POST'])
 @login_required
 def revert_billing(item_type, item_id):
+    # Determinar o item e as permissões (ampliando para usuários em partilha)
     if item_type == 'assunto':
         item = Assunto.query.get_or_404(item_id)
+        can_revert = (
+            item.user_id == current_user.id or
+            (item.completed_by and item.completed_by == current_user.id) or
+            (current_user in item.shared_with)
+        )
     elif item_type == 'tarefa':
         item = Tarefa.query.get_or_404(item_id)
+        can_revert = (
+            item.user_id == current_user.id or
+            (item.completed_by and item.completed_by == current_user.id) or
+            (current_user in item.assunto.shared_with)
+        )
     elif item_type == 'prazo':
         item = PrazoJudicial.query.get_or_404(item_id)
+        can_revert = (
+            item.user_id == current_user.id or
+            (item.completed_by and item.completed_by == current_user.id) or
+            (current_user in item.shared_with)
+        )
     else:
         flash("Tipo de item inválido.", "danger")
         return redirect(url_for('main.billing'))
     
-    # Permitir reverter se o item for do usuário ou, para compartilhados, se concluído pelo usuário
-    if item.user_id != current_user.id and not (hasattr(item, 'completed_by') and item.completed_by == current_user.id):
+    if not can_revert:
         flash("Você não tem permissão para reverter o faturamento deste item.", "danger")
         return redirect(url_for('main.billing'))
     
+    # Processa a reversão conforme o tipo:
     if item_type == 'prazo':
-        # Para prazos, apenas reverte o faturamento e, se necessário, o status
+        # Para prazos, reverte faturamento e status
         item.is_billed = False
-        item.status = False  # Reverte o status (se estiver como True, indica concluído)
-        # Se desejar, pode também limpar data_conclusao e completed_by (caso esses campos sejam usados para prazos)
+        item.status = False
         item.data_conclusao = None
         item.completed_by = None
-    else:
-        # Para assuntos e tarefas, reverte os atributos de conclusão e faturamento
+    elif item_type == 'assunto':
+        # Reverter o assunto – altera os indicadores do assunto...
         item.is_billed = False
         item.is_completed = False
         item.data_conclusao = None
         item.completed_by = None
+        # ...e também reverter todas as tarefas do assunto
+        for tarefa in item.tarefas:
+            if tarefa.is_completed:
+                tarefa.is_billed = False
+                tarefa.is_completed = False
+                tarefa.data_conclusao = None
+                tarefa.completed_by = None
+    elif item_type == 'tarefa':
+        # Reverter a tarefa individual
+        item.is_billed = False
+        item.is_completed = False
+        item.data_conclusao = None
+        item.completed_by = None
+        db.session.commit()
+        # Se essa foi a última tarefa concluída do assunto, reverte também o assunto
+        subject = item.assunto
+        remaining = Tarefa.query.filter_by(assunto_id=subject.id, is_completed=True).count()
+        if remaining == 0:
+            subject.is_completed = False
+            subject.data_conclusao = None
+            subject.completed_by = None
+
+    # Prepara os usuários a serem notificados
+    notified_users = set()
+    if item_type == 'assunto':
+        # Notifica todos os usuários compartilhados e o criador do assunto
+        notified_users.update(item.shared_with)
+        notified_users.add(item.user)
+    elif item_type == 'tarefa':
+        # Notifica os compartilhados do assunto e o criador do assunto
+        notified_users.update(item.assunto.shared_with)
+        notified_users.add(item.assunto.user)
+    elif item_type == 'prazo':
+        notified_users.update(item.shared_with)
+        notified_users.add(item.user)
+    
+    # Remove o usuário que está efetuando a reversão da lista
+    notified_users = {u for u in notified_users if u.id != current_user.id}
+
+    # Define a mensagem e link da notificação conforme o tipo
+    if item_type == 'assunto':
+        mensagem = f"{current_user.nickname} reverteu o faturamento do assunto '{item.nome_assunto}'."
+    elif item_type == 'tarefa':
+        mensagem = f"{current_user.nickname} reverteu o faturamento da tarefa '{item.nome_tarefa}' do assunto '{item.assunto.nome_assunto}'."
+    elif item_type == 'prazo':
+        mensagem = f"{current_user.nickname} reverteu o faturamento do prazo '{item.assunto}' (Processo: {item.processo})."
+    link = url_for('main.billing')
+
+    # Gera a notificação para cada usuário envolvido
+    for user in notified_users:
+        criar_notificacao(user.id, "revert", mensagem, link)
 
     db.session.commit()
     flash("Item revertido para 'não concluído' e enviado para o billing.", "success")
     return redirect(url_for('main.billing'))
+
+
 #END ROTAS BILLING
 
 

@@ -7,7 +7,7 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "Pôr aqui a mensagem sobre o que alterou"
+git commit -m "Organização código com Begin e End - extract_routes.py"
 
 #E envie as alterações com git push.
 
