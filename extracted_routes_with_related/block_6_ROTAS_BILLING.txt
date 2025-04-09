@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTAS BILLING (Linhas 1217 a 1533)
+Bloco: ROTAS BILLING (Linhas 1514 a 1830)
 ================================================================================
 
 #Rotas para Billing

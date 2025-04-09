@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTAS DE AUTENTICAÇÃO (Linhas 38 a 95)
+Bloco: ROTAS DE AUTENTICAÇÃO (Linhas 39 a 96)
 ================================================================================
 
 

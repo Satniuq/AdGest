@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTA INDEX (Linhas 97 a 104)
+Bloco: ROTA INDEX (Linhas 98 a 105)
 ================================================================================
 
 ### PAGINA PRINCIPAL – EXIBE SO NOME DO PROGRAMA E INFOS EMPRESA DEPOIS

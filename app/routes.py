@@ -1481,23 +1481,90 @@ def criar_cliente_partilhado(cliente_partilhado_id):
     flash("Novo cliente criado com os dados partilhados!", "success")
     return redirect(url_for('main.client_info', client_id=novo_cliente.id))
 
+from app.forms import CommentForm
+from app.models import Comment, TarefaHistory, PrazoHistory, User
 
 @main.route('/historico/<int:client_id>')
 @login_required
 def historico_cliente(client_id):
     client = Client.query.get_or_404(client_id)
-    assuntos_concluidos = [assunto for assunto in client.assuntos if assunto.is_completed]
-    assuntos_pendentes = [assunto for assunto in client.assuntos if not assunto.is_completed]
-    prazos_concluidos = [prazo for prazo in client.prazos_judiciais if prazo.status]
-    prazos_pendentes = [prazo for prazo in client.prazos_judiciais if not prazo.status]
+    
+    # Filtra os assuntos: somente os privados ou onde o current_user esteja na lista de partilha.
+    assuntos_filtrados = [
+        assunto for assunto in client.assuntos
+        if assunto.user_id == current_user.id or current_user in assunto.shared_with.all()
+    ]
+    
+    assuntos_concluidos = [a for a in assuntos_filtrados if a.is_completed]
+    assuntos_pendentes = [a for a in assuntos_filtrados if not a.is_completed]
+    
+    # Para os prazos, aplica filtragem semelhante
+    prazos_filtrados = [
+        prazo for prazo in client.prazos_judiciais 
+        if prazo.user_id == current_user.id or current_user in prazo.shared_with.all()
+    ]
+    prazos_concluidos = [p for p in prazos_filtrados if p.status]
+    prazos_pendentes = [p for p in prazos_filtrados if not p.status]
+    
+    # (Opcional) Se precisar das tarefas individualmente:
     tarefas_concluidas = []
     tarefas_pendentes = []
-    for assunto in client.assuntos:
+    for assunto in assuntos_filtrados:
         for tarefa in assunto.tarefas:
             if tarefa.is_completed:
                 tarefas_concluidas.append(tarefa)
             else:
                 tarefas_pendentes.append(tarefa)
+    
+    # Cria o dicionário de comentários para cada assunto
+    comment_assunto = {}
+    for assunto in assuntos_filtrados:
+        comment_assunto[assunto.id] = Comment.query.filter_by(
+            object_type='assunto', object_id=assunto.id
+        ).order_by(Comment.created_at.desc()).all()
+    
+    # Cria o dicionário de comentários para cada prazo
+    comment_prazo = {}
+    for prazo in prazos_filtrados:
+        comment_prazo[prazo.id] = Comment.query.filter_by(
+            object_type='prazo', object_id=prazo.id
+        ).order_by(Comment.created_at.desc()).all()
+    
+    # Cria o dicionário de histórico de tarefas
+    tasks_history = {}
+    for assunto in assuntos_filtrados:
+        for tarefa in assunto.tarefas:
+            tasks_history[tarefa.id] = TarefaHistory.query.filter_by(
+                tarefa_id=tarefa.id
+            ).order_by(TarefaHistory.changed_at.desc()).all()
+    
+    # Cria o dicionário de histórico de prazos
+    prazo_history = {}
+    for prazo in prazos_filtrados:
+        prazo_history[prazo.id] = PrazoHistory.query.filter_by(
+            prazo_id=prazo.id
+        ).order_by(PrazoHistory.changed_at.desc()).all()
+    
+    # Constrói um dicionário de usuários envolvidos
+    user_ids = set()
+    for tarefa_hist in tasks_history.values():
+        for hist in tarefa_hist:
+            user_ids.add(hist.changed_by)
+    for prazo_hist in prazo_history.values():
+        for hist in prazo_hist:
+            user_ids.add(hist.changed_by)
+    for comments in comment_assunto.values():
+        for comment in comments:
+            user_ids.add(comment.user_id)
+    for comments in comment_prazo.values():
+        for comment in comments:
+            user_ids.add(comment.user_id)
+    user_dict = {u.id: u for u in User.query.filter(User.id.in_(list(user_ids))).all()}
+    
+    # Instancia os formulários de comentário para assunto e prazo
+    form = CommentForm()
+    prazo_form = CommentForm()
+    
     return render_template(
         'historico.html',
         client=client,
@@ -1505,9 +1572,18 @@ def historico_cliente(client_id):
         assuntos_pendentes=assuntos_pendentes,
         prazos_concluidos=prazos_concluidos,
         prazos_pendentes=prazos_pendentes,
+        prazos=prazos_filtrados,
         tarefas_concluidas=tarefas_concluidas,
-        tarefas_pendentes=tarefas_pendentes
+        tarefas_pendentes=tarefas_pendentes,
+        comment_assunto=comment_assunto,
+        comment_prazo=comment_prazo,
+        tasks_history=tasks_history,
+        prazo_history=prazo_history,
+        user_dict=user_dict,
+        form=form,
+        prazo_form=prazo_form
     )
+
 #END ROTAS CLIENTES
 
 

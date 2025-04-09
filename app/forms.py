@@ -162,7 +162,7 @@ class ShareForm(FlaskForm):
     submit = SubmitField('Atualizar Compartilhamento')
 #END FORM SHARE ASSUNTO, PRAZO E CLIENTE
 
-#BEGIN FORM COMMENTÁRIO EM HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS
+#BEGIN FORM COMENTÁRIO EM HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS
 from flask_wtf import FlaskForm
 from wtforms import TextAreaField, SubmitField
 from wtforms.validators import DataRequired
@@ -170,3 +170,4 @@ from wtforms.validators import DataRequired
 class CommentForm(FlaskForm):
     comment_text = TextAreaField('Comentário', validators=[DataRequired()])
     submit = SubmitField('Comentar')
+#END FORM COMENTÁRIO EM HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS

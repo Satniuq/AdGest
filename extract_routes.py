@@ -17,7 +17,8 @@ GROUP_MAPPING = {
     "clientes": ["client", "cliente", "clientes", "partilhar_client"],
     "contabilidade": ["contabil", "accounting", "invoice", "documento", "invoices"],
     "assuntos": ["assunto", "tarefa", "prazo", "dashboard", "assuntos", "tarefas", "prazos"],
-    "notifications": ["notification", "notific"]
+    "notifications": ["notification", "notific"],
+    "historico_itens": ["histórico"]
 }
 
 def get_files_from_directory(directory, valid_exts=None, recursive=True, exclude_dirs=None):

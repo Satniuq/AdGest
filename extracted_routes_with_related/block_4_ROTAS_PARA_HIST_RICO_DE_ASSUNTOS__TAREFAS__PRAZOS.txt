@@ -1,42 +1,110 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTAS PARA HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS (Linhas 786 a 845)
+Bloco: ROTAS PARA HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS (Linhas 975 a 1142)
 ================================================================================
 
 @main.route('/history/assunto/<int:assunto_id>')
 @login_required
 def history_assunto(assunto_id):
     assunto = Assunto.query.get_or_404(assunto_id)
-    # Histórico de alterações do assunto
-    assunto_history = AssuntoHistory.query.filter_by(assunto_id=assunto_id)\
-                                          .order_by(AssuntoHistory.changed_at.desc())\
-                                          .all()
     
-    # Monta o dicionário de histórico para cada tarefa associada
+    assunto_history = []  # Não estamos utilizando o histórico do assunto
+
+    # Calcula o total de horas de todas as tarefas associadas
+    total_horas = sum([t.horas for t in assunto.tarefas.all()])
+
+    # Histórico das tarefas associadas
     tasks_history = {}
-    # Se sua relação for dinâmica (lazy='dynamic'), use .all()
-    # Caso contrário, se já for uma lista, apenas itere sobre assunto.tarefas
     for tarefa in assunto.tarefas.all():
         tarefa_history = TarefaHistory.query.filter_by(tarefa_id=tarefa.id)\
                                             .order_by(TarefaHistory.changed_at.desc())\
                                             .all()
         tasks_history[tarefa.id] = tarefa_history
 
-    # Comentários associados ao assunto
+    # Comentários associados
     comments = Comment.query.filter_by(object_type='assunto', object_id=assunto_id)\
                             .order_by(Comment.created_at.desc())\
                             .all()
     # Instancia o formulário de comentário
     form = CommentForm()
     
-    # Passe tasks_history no contexto!
+    # Coleta os IDs dos usuários que alteraram as tarefas (para exibir os nicknames)
+    user_ids = set()
+    for t_hist_list in tasks_history.values():
+        for hist in t_hist_list:
+            user_ids.add(hist.changed_by)
+    
+    from app.models import User
+    users = User.query.filter(User.id.in_(list(user_ids))).all()
+    user_dict = {user.id: user for user in users}
+    
+    # Calcula o último update dentre as tarefas associadas
+    last_update = None
+    last_update_user_id = None
+    for tarefa in assunto.tarefas.all():
+        for hist in tasks_history.get(tarefa.id, []):
+            if last_update is None or hist.changed_at > last_update:
+                last_update = hist.changed_at
+                last_update_user_id = hist.changed_by
+    
     return render_template('history_assunto.html',
                            assunto=assunto,
                            history_entries=assunto_history,
                            tasks_history=tasks_history,
                            comments=comments,
-                           form=form)
+                           form=form,
+                           user_dict=user_dict,
+                           total_horas=total_horas,
+                           last_update=last_update,
+                           last_update_user_id=last_update_user_id)
 
+
+@main.route('/history/prazo/<int:prazo_id>')
+@login_required
+def history_prazo(prazo_id):
+    prazo = PrazoJudicial.query.get_or_404(prazo_id)
+    
+    # Opcional: se houver histórico específico do prazo, pode ser carregado aqui
+    # Para simplificar, vamos assumir que usaremos apenas informações registradas no próprio PrazoJudicial
+    # Ou se houver PrazoHistory:
+    prazo_history = PrazoHistory.query.filter_by(prazo_id=prazo.id)\
+                                      .order_by(PrazoHistory.changed_at.desc())\
+                                      .all()
+    
+    # Calcula o "total de horas" – pode ser o valor armazenado em prazo.horas
+    total_horas = prazo.horas
+    
+    # Comentários associados ao prazo
+    comments = Comment.query.filter_by(object_type='prazo', object_id=prazo.id)\
+                            .order_by(Comment.created_at.desc())\
+                            .all()
+    form = CommentForm()
+    
+    # Coleta IDs dos usuários envolvidos no histórico (se houver)
+    user_ids = set()
+    for hist in prazo_history:
+        user_ids.add(hist.changed_by)
+    from app.models import User
+    users = User.query.filter(User.id.in_(list(user_ids))).all()
+    user_dict = { user.id: user for user in users }
+    
+    # Se desejar calcular o último update, de forma semelhante aos assuntos:
+    last_update = None
+    last_update_user_id = None
+    for hist in prazo_history:
+        if last_update is None or hist.changed_at > last_update:
+            last_update = hist.changed_at
+            last_update_user_id = hist.changed_by
+    
+    return render_template('history_prazo.html',
+                           prazo=prazo,
+                           prazo_history=prazo_history,
+                           comments=comments,
+                           form=form,
+                           user_dict=user_dict,
+                           total_horas=total_horas,
+                           last_update=last_update,
+                           last_update_user_id=last_update_user_id)
 
 @main.route('/add_comment', methods=['POST'])
 @login_required
@@ -54,13 +122,53 @@ def add_comment():
         db.session.add(comment)
         db.session.commit()
         flash("Comentário adicionado.", "success")
-    else:
+        # Envia notificação para os usuários envolvidos conforme o tipo do objeto
+        if object_type == 'assunto':
+            # Carrega o assunto
+            assunto = Assunto.query.get_or_404(object_id)
+
+            # Identifica os usuários envolvidos: criador e os compartilhados
+            compartilhados = list(assunto.shared_with)
+            envolvidos = set([assunto.user])
+            envolvidos.update(compartilhados)
+            
+            # Remove o usuário que fez o comentário
+            envolvidos = [user for user in envolvidos if user.id != current_user.id]
+            
+            # Define a mensagem e o link (p. ex., para a página de histórico do assunto)
+            mensagem = f"{current_user.nickname} adicionou um comentário no assunto '{assunto.nome_assunto}'."
+            link = url_for('main.history_assunto', assunto_id=assunto.id)
+            for user in envolvidos:
+                criar_notificacao(user.id, "update", mensagem, link)
+        
+        elif object_type == 'prazo':
+            # Carrega o prazo
+            prazo = PrazoJudicial.query.get_or_404(object_id)
+
+            # Identifica os usuários envolvidos: criador e os compartilhados do prazo
+            compartilhados = list(prazo.shared_with)
+            envolvidos = set([prazo.user])
+            envolvidos.update(compartilhados)
+            
+            # Remove o usuário que comentou
+            envolvidos = [user for user in envolvidos if user.id != current_user.id]
+            
+            # Define a mensagem e o link para o histórico do prazo
+            mensagem = f"{current_user.nickname} adicionou um comentário no prazo '{prazo.assunto}' (Processo: {prazo.processo})."
+            link = url_for('main.history_prazo', prazo_id=prazo.id)
+            for user in envolvidos:
+                criar_notificacao(user.id, "update", mensagem, link)
+    else: 
         flash("Preencha todos os dados.", "danger")
-    # Redirecione de volta para a página de histórico de acordo com o objeto
+    
+    # Redireciona de volta para a página de histórico de acordo com o objeto
     if object_type == 'assunto':
         return redirect(url_for('main.history_assunto', assunto_id=object_id))
-    # Adicione redirecionamento para outras entidades se necessário
-    return redirect(url_for('dashboard'))
+    elif object_type == 'prazo':
+        return redirect(url_for('main.history_prazo', prazo_id=object_id))
+    return redirect(url_for('main.dashboard'))
+
+
 
 ================================================================================
 
@@ -477,6 +585,7 @@ def add_comment():
       <div class="row row-cols-1 g-3">
         {% for prazo in prazos %}
         <div class="col">
+          <!-- Dentro do card de cada prazo -->
           <div class="card h-100">
             <div class="card-header">
               <div class="d-flex justify-content-between align-items-center mb-1">
@@ -502,19 +611,26 @@ def add_comment():
                   </ul>
                 </div>                
                 <div class="d-flex align-items-center gap-2">
+                  <!-- Botão Concluir -->
                   <form action="{{ url_for('main.toggle_status_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
                     <button type="submit" class="btn btn-sm btn-success" title="Concluir">
                       <i class="fa-solid fa-check"></i>
                     </button>
                   </form>
+                  <!-- Botão Editar -->
                   <a href="{{ url_for('main.edit_prazo', prazo_id=prazo.id) }}" class="btn btn-sm btn-warning" title="Editar">
                     <i class="fa-solid fa-pen-to-square"></i>
                   </a>
+                  <!-- Botão Excluir -->
                   <form action="{{ url_for('main.delete_prazo', prazo_id=prazo.id) }}" method="POST" class="d-inline">
                     <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
                       <i class="fa-solid fa-trash"></i>
                     </button>
                   </form>
+                  <!-- Botão Histórico para Prazos -->
+                  <a href="{{ url_for('main.history_prazo', prazo_id=prazo.id) }}" class="btn btn-sm btn-info" title="Histórico">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                  </a>
                 </div>
               </div>
             </div>
@@ -727,116 +843,245 @@ def add_comment():
 {% block title %}Histórico do Assunto: {{ assunto.nome_assunto }}{% endblock %}
 {% block content %}
 <div class="container my-4">
-  <h2>Histórico do Assunto: {{ assunto.nome_assunto }}</h2>
-  
-  <!-- Card com as Informações do Assunto -->
-  <div class="card mb-3">
-    <div class="card-header">
-      Informações do Assunto
-    </div>
-    <div class="card-body">
-      <p><strong>Cliente:</strong> {{ assunto.client.name }}</p>
-      <p><strong>Criado em:</strong> 
-         {% if assunto.created_at %}
-           {{ assunto.created_at.strftime('%d/%m/%Y %H:%M') }}
-         {% else %}
-           N/A
-         {% endif %}
-      </p>
-      {% if assunto.updated_at %}
-      <p><strong>Última Atualização:</strong> {{ assunto.updated_at.strftime('%d/%m/%Y %H:%M') }}</p>
-      {% endif %}
-      <p><strong>Status:</strong> {% if assunto.is_completed %}Concluído{% else %}Aberto{% endif %}</p>
-    </div>
-  </div>
-  
-  <!-- Histórico de Edições do Assunto -->
-  <div class="mb-3">
-    <h3>Histórico de Edições do Assunto</h3>
-    {% if assunto_history %}
-      <ul class="list-group">
-      {% for hist in assunto_history %}
-        <li class="list-group-item">
-          <strong>{{ hist.change_type|capitalize }}</strong>
-          em {{ hist.changed_at.strftime('%d/%m/%Y %H:%M') }}
-          por usuário ID {{ hist.changed_by }}
-          {% if hist.snapshot %}
-            <div>
-              <small>Detalhes:</small>
-              <pre>{{ hist.snapshot|tojson(indent=2) }}</pre>
-            </div>
-          {% endif %}
-        </li>
-      {% endfor %}
-      </ul>
-    {% else %}
-      <p>Sem histórico de edições para este assunto.</p>
-    {% endif %}
-  </div>
-  
-  <!-- Histórico das Tarefas Associadas -->
-  <div class="mb-3">
-    <h3>Histórico das Tarefas Associadas</h3>
-    {% if assunto.tarefas.count() > 0 %}
-      {% for tarefa in assunto.tarefas.all() %}
-        <div class="card mb-2">
-          <div class="card-header">
-            Tarefa: {{ tarefa.nome_tarefa }}
-          </div>
-          <div class="card-body">
-            <p><strong>Horas:</strong> {{ tarefa.horas }}h</p>
-            <p><strong>Status:</strong> {% if tarefa.is_completed %}Concluída{% else %}Aberta{% endif %}</p>
-            <p><strong>Criada em:</strong> 
-               {% if tarefa.created_at %}
-                 {{ tarefa.created_at.strftime('%d/%m/%Y %H:%M') }}
-               {% else %}
-                 N/A
-               {% endif %}
-            </p>
-            <!-- Histórico da Tarefa -->
-            {% set tarefa_hist = tasks_history[tarefa.id] %}
-            {% if tarefa_hist %}
-              <h5>Histórico da Tarefa</h5>
-              <ul class="list-group">
-                {% for hist in tarefa_hist %}
-                  <li class="list-group-item">
-                    <strong>{{ hist.change_type|capitalize }}</strong>
-                    em {{ hist.changed_at.strftime('%d/%m/%Y %H:%M') }}
-                    por usuário ID {{ hist.changed_by }}
-                    {% if hist.snapshot %}
-                      <div>
-                        <small>Detalhes:</small>
-                        <pre>{{ hist.snapshot|tojson(indent=2) }}</pre>
-                      </div>
-                    {% endif %}
-                  </li>
-                {% endfor %}
-              </ul>
+  <div class="row">
+    <!-- Coluna da Esquerda: Informações e Histórico das Tarefas -->
+    <div class="col-md-8">
+      <h2>Histórico do Assunto: {{ assunto.nome_assunto }}</h2>
+
+      <!-- Informações do Assunto em Linha -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <p>
+            <strong>Cliente:</strong> {{ assunto.client.name }} |
+            <strong>Criado em:</strong> {{ assunto.created_at.strftime('%d/%m/%Y %H:%M') if assunto.created_at else 'N/A' }} |
+            <strong>Por:</strong> {{ assunto.user.nickname }} |
+            <strong>Última Atualização:</strong>
+            {% if last_update %}
+              {{ last_update.strftime('%d/%m/%Y %H:%M') }}
             {% else %}
-              <p>Sem histórico para esta tarefa.</p>
-            {% endif %}
-          </div>
+              N/A
+            {% endif %} |
+            <strong>Por:</strong>
+            {% if last_update and last_update_user_id in user_dict %}
+              {{ user_dict[last_update_user_id].nickname }}
+            {% else %}
+              N/A
+            {% endif %} |
+            <strong>Status:</strong> {% if assunto.is_completed %}Concluído{% else %}Aberto{% endif %} |
+            <strong>Total Horas:</strong> {{ total_horas }}
+          </p>
         </div>
-      {% endfor %}
-    {% else %}
-      <p>Sem tarefas associadas a este assunto.</p>
-    {% endif %}
-        
-    <!-- Formulário para adicionar novo comentário -->
-    <div class="mt-3">
-      <form action="{{ url_for('main.add_comment') }}" method="POST">
-        {{ form.hidden_tag() }}
-        <input type="hidden" name="object_type" value="assunto">
-        <input type="hidden" name="object_id" value="{{ assunto.id }}">
-        <div class="mb-3">
-          {{ form.comment_text.label(class="form-label") }}
-          {{ form.comment_text(rows=3, class="form-control") }}
+      </div>
+
+
+      <!-- Histórico das Tarefas Associadas -->
+      <div class="mb-3">
+        <h3>Histórico das Tarefas Associadas</h3>
+        {% if assunto.tarefas.count() > 0 %}
+          {% for tarefa in assunto.tarefas.all() %}
+            <div class="card mb-2">
+              <div class="card-header">
+                Tarefa: {{ tarefa.nome_tarefa }}
+              </div>
+              <div class="card-body">
+                <p>
+                  <strong>Horas:</strong> {{ tarefa.horas }}h | 
+                  <strong>Status:</strong> {% if tarefa.is_completed %}Concluída{% else %}Aberta{% endif %} | 
+                  <strong>Criada em:</strong> {% if tarefa.created_at %}{{ tarefa.created_at.strftime('%d/%m/%Y %H:%M') }}{% else %}N/A{% endif %}
+                </p>
+                
+                <!-- BOTÃO QUE MOSTRA/ESCONDE O HISTÓRICO DA TAREFA -->
+                <button class="btn btn-secondary" type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#hist-tarefa-{{ tarefa.id }}"
+                        aria-expanded="false"
+                        aria-controls="hist-tarefa-{{ tarefa.id }}">
+                  Ver Histórico
+                </button>
+                
+                <!-- Conteúdo Collapsado: Histórico da Tarefa -->
+                <div class="collapse mt-3" id="hist-tarefa-{{ tarefa.id }}">
+                  {% set tarefa_hist = tasks_history[tarefa.id] %}
+                  {% if tarefa_hist %}
+                    <h5>Histórico da Tarefa</h5>
+                    <ul class="list-group">
+                      {% for hist in tarefa_hist %}
+                        <li class="list-group-item">
+                          <strong>{{ hist.change_type|capitalize }}</strong>
+                          em {{ hist.changed_at.strftime('%d/%m/%Y %H:%M') }}
+                          por usuário {{ user_dict[hist.changed_by].nickname if hist.changed_by in user_dict else 'Desconhecido' }}
+                          {% if hist.snapshot %}
+                            <div class="mt-2">
+                              <small>Detalhes:</small>
+                              {{ hist.snapshot | render_snapshot }}
+                            </div>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  {% else %}
+                    <p class="text-muted">Sem histórico para esta tarefa.</p>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- Coluna da Direita: Formulário + Comentários no mesmo card -->
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          Comentário
         </div>
-        <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-      </form>
+        <div class="card-body">
+          <!-- Formulário de Comentário -->
+          <form action="{{ url_for('main.add_comment') }}" method="POST">
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="object_type" value="assunto">
+            <input type="hidden" name="object_id" value="{{ assunto.id }}">
+            <div class="mb-3">
+              {{ form.comment_text.label(class="form-label") }}
+              {{ form.comment_text(rows=3, class="form-control") }}
+            </div>
+            <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+          </form>
+        </div>
+
+        {% if comments %}
+        <!-- Linha divisória e seção para os comentários -->
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <ul class="list-group list-group-flush">
+            {% for comment in comments %}
+              <li class="list-group-item">
+                {{ comment.user.nickname }} 
+                | {{ comment.created_at.strftime('%d/%m/%Y %H:%M') }} 
+                | {{ comment.comment_text }}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <!-- Se não houver comentários, pode exibir algo enxuto ou simplesmente omitir esse bloco -->
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <p class="text-muted">Nenhum comentário registrado.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- Fim da row -->
+</div><!-- Fim da container -->
+{% endblock %}
+
+--------------------------------------------------------------------------------
+
+-- Arquivo: app/templates\history_prazo.html --
+{% extends "base.html" %}
+{% block title %}Histórico do Prazo: {{ prazo.assunto }}{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <div class="row">
+    <!-- Coluna da Esquerda: Informações e Histórico do Prazo -->
+    <div class="col-md-8">
+      <h2>Histórico do Prazo: {{ prazo.assunto }} - {{ prazo.processo }}</h2>
+      
+      <!-- Informações do Prazo em Linha -->
+      <div class="card mb-3">
+        <div class="card-body">
+          <p>
+            <strong>Cliente:</strong> {{ prazo.client.name }} |
+            <strong>Criado em:</strong> {{ prazo.created_at.strftime('%d/%m/%Y %H:%M') if prazo.created_at else 'N/A' }} |
+            <strong>Por:</strong> {{ prazo.user.nickname }} |
+            <strong>Última Atualização:</strong>
+            {% if last_update %}
+              {{ last_update.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              N/A
+            {% endif %} |
+            <strong>Por:</strong>
+            {% if last_update and last_update_user_id in user_dict %}
+              {{ user_dict[last_update_user_id].nickname }}
+            {% else %}
+              N/A
+            {% endif %} |
+            <strong>Status:</strong> {% if prazo.status %}Concluído{% else %}Pendente{% endif %} |
+            <strong>Total Horas:</strong> {{ total_horas }}
+          </p>
+        </div>
+      </div>
+      
+      <!-- Histórico de Alterações do Prazo -->
+      <div class="mb-3">
+        <h3>Histórico de Alterações</h3>
+        {% if prazo_history %}
+          <ul class="list-group">
+            {% for hist in prazo_history %}
+              <li class="list-group-item">
+                <strong>{{ hist.change_type|capitalize }}</strong>
+                em {{ hist.changed_at.strftime('%d/%m/%Y %H:%M') }}
+                por usuário {{ user_dict[hist.changed_by].nickname if hist.changed_by in user_dict else 'Desconhecido' }}
+                {% if hist.snapshot %}
+                  <div class="mt-2">
+                    <small>Detalhes:</small>
+                    {{ hist.snapshot | render_snapshot }}
+                  </div>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>Sem histórico de alterações para esse prazo.</p>
+        {% endif %}
+      </div>
+    </div>
+    
+    <!-- Coluna da Direita: Formulário e Comentários -->
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          Comentário
+        </div>
+        <div class="card-body">
+          <form action="{{ url_for('main.add_comment') }}" method="POST">
+            {{ form.hidden_tag() }}
+            <input type="hidden" name="object_type" value="prazo">
+            <input type="hidden" name="object_id" value="{{ prazo.id }}">
+            <div class="mb-3">
+              {{ form.comment_text.label(class="form-label") }}
+              {{ form.comment_text(rows=3, class="form-control") }}
+            </div>
+            <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+          </form>
+        </div>
+        {% if comments %}
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <ul class="list-group list-group-flush">
+            {% for comment in comments %}
+              <li class="list-group-item">
+                {{ comment.user.nickname }} | {{ comment.created_at.strftime('%d/%m/%Y %H:%M') }} | {{ comment.comment_text }}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <hr class="my-0">
+        <div class="card-body">
+          <h6>Comentários Registrados</h6>
+          <p class="text-muted">Nenhum comentário registrado.</p>
+        </div>
+        {% endif %}
+      </div>
     </div>
   </div>
-  
 </div>
 {% endblock %}
 
@@ -946,6 +1191,8 @@ class Assunto(db.Model):
     is_completed = db.Column(db.Boolean, default=False)
     is_billed = db.Column(db.Boolean, default=False)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     tarefas = db.relationship('Tarefa', backref='assunto', cascade="all, delete-orphan", lazy='dynamic')
     shared_with = db.relationship(
@@ -976,6 +1223,8 @@ class Tarefa(db.Model):
     is_billed = db.Column(db.Boolean, default=False)
     data_conclusao = db.Column(db.Date, nullable=True)
     completed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
     user = db.relationship("User", backref="tarefas_criadas", foreign_keys=lambda: [Tarefa.__table__.c.user_id])
 
@@ -1048,6 +1297,18 @@ class TarefaHistory(db.Model):
 
     def __repr__(self):
         return f"<TarefaHistory {self.tarefa_id} {self.change_type} em {self.changed_at}>"
+
+class PrazoHistory(db.Model):
+    __tablename__ = 'prazos_history'
+    id = db.Column(db.Integer, primary_key=True)
+    prazo_id = db.Column(db.Integer, nullable=False)  # FK para o prazo original
+    change_type = db.Column(db.String(20))  # 'criado', 'editado', 'excluído', etc.
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    snapshot = db.Column(db.JSON)  # Armazene as mudanças como JSON
+
+    def __repr__(self):
+        return f"<PrazoHistory {self.prazo_id} {self.change_type} em {self.changed_at}>"
 
 class Comment(db.Model):
     __tablename__ = 'comments'
@@ -1167,6 +1428,14 @@ class ShareForm(FlaskForm):
         validators=[Optional()]
     )
     submit = SubmitField('Atualizar Compartilhamento')
+
+from flask_wtf import FlaskForm
+from wtforms import TextAreaField, SubmitField
+from wtforms.validators import DataRequired
+
+class CommentForm(FlaskForm):
+    comment_text = TextAreaField('Comentário', validators=[DataRequired()])
+    submit = SubmitField('Comentar')
 
 --------------------------------------------------------------------------------
 

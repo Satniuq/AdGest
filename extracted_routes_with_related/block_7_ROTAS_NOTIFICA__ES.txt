@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTAS NOTIFICAÇÕES (Linhas 1536 a 1641)
+Bloco: ROTAS NOTIFICAÇÕES (Linhas 1833 a 1938)
 ================================================================================
 
 #Rotas para notificações

@@ -1,6 +1,6 @@
 ==== BLOCO DE ROTAS EXTRAÍDO ====
 Arquivo: app/routes.py
-Bloco: ROTA PRINCIPAL PARA CONTABILIDADE (Linhas 1643 a 1656)
+Bloco: ROTA PRINCIPAL PARA CONTABILIDADE (Linhas 1940 a 1953)
 ================================================================================
 
 #ROTA PRINCIPAL PARA CONTABILIDADE
