@@ -1481,32 +1481,40 @@ def criar_cliente_partilhado(cliente_partilhado_id):
     flash("Novo cliente criado com os dados partilhados!", "success")
     return redirect(url_for('main.client_info', client_id=novo_cliente.id))
 
+from sqlalchemy import or_
+from app.models import Assunto, PrazoJudicial, Comment, TarefaHistory, PrazoHistory, User
 from app.forms import CommentForm
-from app.models import Comment, TarefaHistory, PrazoHistory, User
 
 @main.route('/historico/<int:client_id>')
 @login_required
 def historico_cliente(client_id):
     client = Client.query.get_or_404(client_id)
     
-    # Filtra os assuntos: somente os privados ou onde o current_user esteja na lista de partilha.
-    assuntos_filtrados = [
-        assunto for assunto in client.assuntos
-        if assunto.user_id == current_user.id or current_user in assunto.shared_with.all()
-    ]
-    
+    # Filtra os assuntos usando uma query para incluir os compartilhados
+    assuntos_filtrados = Assunto.query.filter(
+        Assunto.client.has(Client.number_interno == client.number_interno),
+        or_(
+            Assunto.user_id == current_user.id,
+            Assunto.shared_with.any(User.id == current_user.id)
+        )
+    ).all()
+
     assuntos_concluidos = [a for a in assuntos_filtrados if a.is_completed]
     assuntos_pendentes = [a for a in assuntos_filtrados if not a.is_completed]
     
-    # Para os prazos, aplica filtragem semelhante
-    prazos_filtrados = [
-        prazo for prazo in client.prazos_judiciais 
-        if prazo.user_id == current_user.id or current_user in prazo.shared_with.all()
-    ]
+    # Filtra os prazos de forma semelhante
+    prazos_filtrados = PrazoJudicial.query.filter(
+        PrazoJudicial.client.has(Client.number_interno == client.number_interno),
+        or_(
+            PrazoJudicial.user_id == current_user.id,
+            PrazoJudicial.shared_with.any(User.id == current_user.id)
+        )
+    ).all()
+
     prazos_concluidos = [p for p in prazos_filtrados if p.status]
     prazos_pendentes = [p for p in prazos_filtrados if not p.status]
     
-    # (Opcional) Se precisar das tarefas individualmente:
+    # (Opcional) Reúne tarefas para possível uso
     tarefas_concluidas = []
     tarefas_pendentes = []
     for assunto in assuntos_filtrados:
@@ -1516,21 +1524,21 @@ def historico_cliente(client_id):
             else:
                 tarefas_pendentes.append(tarefa)
     
-    # Cria o dicionário de comentários para cada assunto
+    # Comentários dos assuntos
     comment_assunto = {}
     for assunto in assuntos_filtrados:
         comment_assunto[assunto.id] = Comment.query.filter_by(
             object_type='assunto', object_id=assunto.id
         ).order_by(Comment.created_at.desc()).all()
     
-    # Cria o dicionário de comentários para cada prazo
+    # Comentários dos prazos
     comment_prazo = {}
     for prazo in prazos_filtrados:
         comment_prazo[prazo.id] = Comment.query.filter_by(
             object_type='prazo', object_id=prazo.id
         ).order_by(Comment.created_at.desc()).all()
     
-    # Cria o dicionário de histórico de tarefas
+    # Histórico de tarefas
     tasks_history = {}
     for assunto in assuntos_filtrados:
         for tarefa in assunto.tarefas:
@@ -1538,14 +1546,14 @@ def historico_cliente(client_id):
                 tarefa_id=tarefa.id
             ).order_by(TarefaHistory.changed_at.desc()).all()
     
-    # Cria o dicionário de histórico de prazos
+    # Histórico de prazos
     prazo_history = {}
     for prazo in prazos_filtrados:
         prazo_history[prazo.id] = PrazoHistory.query.filter_by(
             prazo_id=prazo.id
         ).order_by(PrazoHistory.changed_at.desc()).all()
     
-    # Constrói um dicionário de usuários envolvidos
+    # Constrói um dicionário de usuários envolvidos nos históricos e comentários
     user_ids = set()
     for tarefa_hist in tasks_history.values():
         for hist in tarefa_hist:
@@ -1561,7 +1569,7 @@ def historico_cliente(client_id):
             user_ids.add(comment.user_id)
     user_dict = {u.id: u for u in User.query.filter(User.id.in_(list(user_ids))).all()}
     
-    # Instancia os formulários de comentário para assunto e prazo
+    # Instancia os formulários para comentários
     form = CommentForm()
     prazo_form = CommentForm()
     
@@ -1583,6 +1591,7 @@ def historico_cliente(client_id):
         form=form,
         prazo_form=prazo_form
     )
+
 
 #END ROTAS CLIENTES
 
@@ -1633,9 +1642,9 @@ def billing():
                 details_lines.append(f"Assunto: {subj.nome_assunto}")
                 registros_assunto = HoraAdicao.query.filter_by(item_type='assunto', item_id=subj.id).all()
                 for reg in registros_assunto:
-                    user = User.query.get(reg.user_id)
+                    usuario = User.query.get(reg.user_id)
                     details_lines.append(
-                        f"  [Assunto] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                        f"  [Assunto] Horas adicionadas: {reg.horas_adicionadas}h por usuário {usuario.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
                     )
                 for task in subj.tarefas:
                     if task.is_completed and not task.is_billed:
@@ -1645,8 +1654,8 @@ def billing():
                         registros_tarefa = HoraAdicao.query.filter_by(item_type='tarefa', item_id=task.id).all()
                         detalhe_tarefa = f"  Tarefa: {task.nome_tarefa}, Horas: {task.horas}h, Concluída em: {completion_date}"
                         for reg in registros_tarefa:
-                            user = User.query.get(reg.user_id)
-                            detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                            usuario = User.query.get(reg.user_id)
+                            detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {usuario.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
                         details_lines.append(detalhe_tarefa)
             
             # Processar Tarefas selecionadas individualmente (evitando duplicidade)
@@ -1661,8 +1670,8 @@ def billing():
                     registros_tarefa = HoraAdicao.query.filter_by(item_type='tarefa', item_id=task.id).all()
                     detalhe_tarefa = f"Tarefa: {task.nome_tarefa}, Horas: {task.horas}h, Concluída em: {completion_date}"
                     for reg in registros_tarefa:
-                        user = User.query.get(reg.user_id)
-                        detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                        usuario = User.query.get(reg.user_id)
+                        detalhe_tarefa += f"\n     [Tarefa] Horas adicionadas: {reg.horas_adicionadas}h por usuário {usuario.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
                     details_lines.append(detalhe_tarefa)
             
             # Processar Prazos selecionados
@@ -1674,8 +1683,8 @@ def billing():
                 detalhe_prazo = f"Prazo: {prazo.assunto} (Processo: {prazo.processo}), Horas: {prazo.horas}h, Concluído em: {data_conclusao}"
                 registros_prazo = HoraAdicao.query.filter_by(item_type='prazo', item_id=prazo.id).all()
                 for reg in registros_prazo:
-                    user = User.query.get(reg.user_id)
-                    detalhe_prazo += f"\n     [Prazo] Horas adicionadas: {reg.horas_adicionadas}h por usuário {user.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
+                    usuario = User.query.get(reg.user_id)
+                    detalhe_prazo += f"\n     [Prazo] Horas adicionadas: {reg.horas_adicionadas}h por usuário {usuario.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
                 details_lines.append(detalhe_prazo)
             
             nota = NotaHonorarios(
@@ -1686,6 +1695,23 @@ def billing():
                 is_confirmed=True
             )
             db.session.add(nota)
+
+            # NOTIFICAÇÃO: inicie o loop de notificação para este grupo (cliente)
+            shared_client = Client.query.get(client_id)
+            # Garanta que o relacionamento 'shares' retorne todos os registros (usando .all())
+            shared_users = [share.user for share in shared_client.shares.all()]
+            # Recupere o dono do cliente a partir do user_id
+            client_owner = User.query.get(shared_client.user_id)
+            # Construa o conjunto de envolvidos (incluindo o dono e os compartilhados)
+            envolvidos = set(shared_users + [client_owner])
+            
+            for u in envolvidos:
+                # Notifica todos, exceto quem gerou a nota
+                if u.id != current_user.id:
+                    mensagem = f"{current_user.nickname} gerou nota de honorários para o cliente {shared_client.name}."
+                    link = url_for('main.client_info', client_id=shared_client.id)
+                    criar_notificacao(u.id, "billing", mensagem, link)
+            
         db.session.commit()
         flash("Notas de honorários geradas com sucesso!", "success")
         return redirect(url_for('main.billing'))

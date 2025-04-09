@@ -6,18 +6,33 @@ Falta template para usuário, para se ver e editar as informações. E no menu d
 ++++
 NOTIFICAÇÕES
 
-Falta notificação quando se criam tarefas em assuntos partilhados (quer seja o criador do assunto quer seja um que tenha a partilha, todos recebem notificações de todos)
+Notificação quando se adiciona comentário num assunto partilhado
 
-Falta notificação de exclusão de assunto partilhado
+VERIFICAÇÃO DAS NOTIFICAÇÕES:
+	1 - Partilha de cliente não existente - aparece botão verificar e manda para pagina verificar e cria cliente novo - OK
+	2 - Partilha de cliente existente - OK
+	3 - Partilha de assuntos - ok
+	5 - partilha de prazo - ok
+	6 - Marcar prazo partilhado como concluído - ok
+	7 - marcar tarefa partilhada em assunto como concluída - ok
+	8 - marcar assunto partilhado como concluído - ok
+	9 - adicionar horas em assuntos e prazos, pelo dono e pelos users da partilha - OK
+	10 - editar assunto partilhado - ok
+	11 - editar tarefa partilhada- ok
+	12 - excluir tarefa partilhada em assunto - ok
+	13 - criar tarefa - ok
+	14 - gerar nota honorários - criador da nota recebe notificação
 
-++
-quando se emite uma nota de assunto/prazo/tarefa partilhada ou que nos foi partilhada.
+FALTA: os não criadores, mas que estão em partilha, tabem receberem notificacao
 
 
-+++++
-MANTER REGISTO DE TUDO
-no template do editar assunto/tarefa/prazo, devia haver uma janelinha que aparecia com o hitorico do que ja aconteceu; quem e quando adicionou horas e quantas; quem editou e alterações. 
-Nos assuntos, quem criou/concluiu/adicionou horas/excluiu ou editou tarefas.
++++++++
+HISTÓRICO DAS NOTIFICAÇÕES
+
+Os botões ver deviam desaparecer
+
+Filtro por cliente, processo e user de partilha
+
 
 +++++++++++++
 USER FRIENDLY
@@ -29,6 +44,27 @@ Botão voltar voltar a página anterior
 REGRAS DE SEGURANÇA
 
 Quando fecho o terminal devia terminar a sessão
+
++++++++++++
+HISTÓRIC DE NOTAS DE HONORÁRIOS
+
+Os números das notas recomeçam em cada pagina, deviam ser contínuos e não quebrar por pagina
+
+
++++++++++
+CLIENTES
+
+
+acho que ja está tudo, mas verificar se na partilha de clientes por CSV, qual é a regra para resolver conflitos de clientes ja existentes e se há fragilidades. A lógica devia ser - cliente novo (se numero interno não for igual) cria cliente novo, como está; cliente já existente (numero interno igual) com dados iguais, corrige com dados novos 
+
+
+
++++++++
+HISTÓRICO DE BILLING
+
+Problema: no histórico do billing só aparecem as notas emitidas de itens criados pelo user e deviam aparecer as notas de itens em partilha, tanto criadas por outros users e partilhadas com o user, como criadas pelo user e partilhadas com outros users.
+
+
 
 
 

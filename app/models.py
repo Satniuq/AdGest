@@ -253,7 +253,7 @@ class ClientShare(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
     option = db.Column(db.String(50), nullable=False)  # Armazena "info", "historico" ou "billing"
-
+    
     def __repr__(self):
         return f'<ClientShare client_id:{self.client_id} user_id:{self.user_id} option:{self.option}>'
 #END MODEL SHARE CLIENTE
