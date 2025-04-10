@@ -20,7 +20,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 # Módulos do projeto
 from app.forms import (RegistrationForm, LoginForm, AssuntoForm, TarefaForm, 
                        PrazoJudicialForm, ClientForm, ShareForm, CommentForm,
-                       EditProfileForm)
+                       EditProfileForm, RequestResetForm, ResetPasswordForm)
 from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         NotaHonorarios, ClientShare, shared_assuntos,
                         shared_prazos, HoraAdicao, DocumentoContabilistico,
@@ -28,6 +28,7 @@ from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         Comment)
 from app.decorators import admin_required
 from app.decorators import handle_db_errors
+from app import db
 #END FROM
 
 #BEGIN DEF
@@ -128,6 +129,52 @@ def login():
         else:
             flash('Usuário ou senha incorretos.', 'danger')
     return render_template('login.html', form=form)
+
+@main.route('/reset_password', methods=['GET', 'POST'])
+def reset_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    form = RequestResetForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            send_reset_email(user)  # Função que envia o e-mail
+        flash('Se um usuário com esse e-mail existir, as instruções para redefinir a senha foram enviadas.', 'info')
+        return redirect(url_for('main.login'))
+    return render_template('reset_request.html', form=form)
+
+@main.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_token(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('main.index'))
+    user = User.verify_reset_token(token)
+    if user is None:
+        flash('O token é inválido ou expirou.', 'warning')
+        return redirect(url_for('main.reset_request'))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.password = generate_password_hash(form.password.data)
+        db.session.commit()
+        flash('Sua senha foi atualizada! Faça login com a nova senha.', 'success')
+        return redirect(url_for('main.login'))
+    return render_template('reset_token.html', form=form)
+
+from flask_mail import Message
+from app import mail
+
+def send_reset_email(user):
+    token = user.get_reset_token()
+    reset_url = url_for('main.reset_token', token=token, _external=True)
+    sender = current_app.config.get('MAIL_DEFAULT_SENDER', 'noreply@seusite.com')
+    msg = Message('Redefinir senha - AdGest',
+                  sender=sender,
+                  recipients=[user.email])
+    msg.body = f'''Para redefinir sua senha, visite o seguinte link:
+{reset_url}
+
+Se você não solicitou essa alteração, ignore este e-mail.
+'''
+    mail.send(msg)
 
 @main.route('/logout')
 @login_required

@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, DateField, IntegerField, SubmitField, TextAreaField, PasswordField, FloatField, SelectField, FileField
-from wtforms.validators import DataRequired, Optional, Length, ValidationError, Email
+from wtforms.validators import DataRequired, Optional, Length, ValidationError, Email, EqualTo
 from wtforms_sqlalchemy.fields import QuerySelectField
 from wtforms_sqlalchemy.fields import QuerySelectMultipleField
 from app.models import Client, User, Notification
@@ -31,6 +31,18 @@ class RegistrationForm(FlaskForm):
     ], validators=[DataRequired()])
     submit = SubmitField('Registrar')
 #END FORM REGISTAR
+
+#BEGIN FORM RECUPERAR SENHA
+class RequestResetForm(FlaskForm):
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    submit = SubmitField('Solicitar Redefinição')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('Nova Senha', validators=[DataRequired(), Length(min=6)])
+    confirm_password = PasswordField('Confirme a Senha', 
+                                      validators=[DataRequired(), EqualTo('password', message='As senhas devem coincidir.')])
+    submit = SubmitField('Redefinir Senha')
+#END FORM RECUPERAR SENHA
 
 #BEGIN FORM EDIT PROFILE#
 class EditProfileForm(FlaskForm):

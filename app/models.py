@@ -3,6 +3,8 @@ import json
 from . import db
 from flask_login import UserMixin
 from datetime import datetime, date
+from itsdangerous import URLSafeTimedSerializer as Serializer
+from flask import current_app
 
 #BEGIN MODEL TABELA ASSOCIAÇÃO ASSUNTOS, PRAZOS E CLIENTES
 # Tabela de associação para assuntos, prazos e clientes
@@ -33,22 +35,30 @@ class User(UserMixin, db.Model):
     profile_image = db.Column(db.String(120), default='default.jpg')
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), default='advogado')
-
-    __table_args__ = (db.UniqueConstraint('email', name='uq_users_email'),)
-
-    # relacionamentos:
-    assuntos_compartilhados = db.relationship(
-        'Assunto',
-        secondary=shared_assuntos,
-        backref=db.backref('compartilhados', lazy='dynamic'),
-        lazy='dynamic'
-    )
     
-    # Relação reversa para as associações de clientes compartilhados
-    client_shares = db.relationship('ClientShare', backref='user', lazy='dynamic')
+    __table_args__ = (db.UniqueConstraint('email', name='uq_users_email'),)
+    
+    # Relacionamentos e outros métodos...
     
     def __repr__(self):
         return f'<User {self.username}>'
+    
+    def get_reset_token(self):
+        """Gera um token para redefinição de senha sem definir expiração na criação."""
+        s = Serializer(current_app.config['SECRET_KEY'])
+        # dumps retorna uma string (ou bytes, dependendo da versão) – vamos garantir que seja string
+        return s.dumps({'user_id': self.id})
+    
+    @staticmethod
+    def verify_reset_token(token, expires_sec=3600):
+        """Verifica o token, permitindo um tempo máximo (max_age) definido em expires_sec."""
+        s = Serializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token, max_age=expires_sec)
+            user_id = data.get('user_id')
+        except Exception:
+            return None
+        return User.query.get(user_id)
 
 #END MODEL USER
 
