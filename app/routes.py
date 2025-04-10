@@ -3,6 +3,7 @@ import csv
 import unicodedata
 from io import StringIO
 import json
+import os
 #END IMPORT
 
 #BEGIN FROM
@@ -13,11 +14,13 @@ from flask import Blueprint, json, render_template, redirect, url_for, flash, re
 from sqlalchemy import func, or_, and_
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from flask_login import login_user, logout_user, login_required, current_user
 
 # Módulos do projeto
 from app.forms import (RegistrationForm, LoginForm, AssuntoForm, TarefaForm, 
-                       PrazoJudicialForm, ClientForm, ShareForm, CommentForm)
+                       PrazoJudicialForm, ClientForm, ShareForm, CommentForm,
+                       EditProfileForm)
 from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         NotaHonorarios, ClientShare, shared_assuntos,
                         shared_prazos, HoraAdicao, DocumentoContabilistico,
@@ -42,6 +45,45 @@ main = Blueprint('main', __name__)
 @login_required
 def profile():
     return render_template('profile.html', user=current_user)
+
+@main.route('/edit_profile', methods=['GET', 'POST'])
+@login_required
+def edit_profile():
+    form = EditProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        current_user.nickname = form.nickname.data
+        current_user.email = form.email.data
+
+        if form.profile_image.data:
+            # Log do que vem no campo de arquivo
+            current_app.logger.info(f"Tipo de form.profile_image.data: {type(form.profile_image.data)}")
+            # Se for um objeto FileStorage, ele deve ter o atributo filename
+            file_data = form.profile_image.data
+            current_app.logger.info(f"Arquivo recebido: {repr(file_data)}")
+            if hasattr(file_data, 'filename') and file_data.filename:
+                filename = secure_filename(file_data.filename)
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+                upload_path = os.path.join(upload_folder, filename)
+                current_app.logger.info(f"Salvando imagem em: {upload_path}")
+                file_data.save(upload_path)
+                current_user.profile_image = filename
+            else:
+                current_app.logger.info("Nenhum arquivo selecionado ou o valor não é um objeto FileStorage.")
+        else:
+            current_app.logger.info("Campo profile_image está vazio.")
+
+        try:
+            db.session.commit()
+            flash('Perfil atualizado com sucesso!', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash('Erro ao atualizar o perfil. Tente novamente.', 'danger')
+            current_app.logger.error(f"Erro ao atualizar perfil: {e}")
+        
+        return redirect(url_for('main.profile'))
+    
+    return render_template('edit_profile.html', form=form)
 
 @main.route('/register', methods=['GET', 'POST'])
 @login_required
@@ -1994,12 +2036,27 @@ def inject_notifications():
 @main.route('/notifications/historico')
 @login_required
 def notifications_historico():
-    notifs_lidas = Notification.query.filter_by(
-        user_id=current_user.id, is_read=True
-    ).order_by(Notification.timestamp.desc()).all()
-    return render_template('notifications_historico.html', notifications=notifs_lidas)
+    page = request.args.get('page', 1, type=int)
+    per_page = 10  # Defina quantas notificações serão exibidas por página
+    pagination = Notification.query.filter_by(
+        user_id=current_user.id, 
+        is_read=True
+    ).order_by(Notification.timestamp.desc()).paginate(page=page, per_page=per_page, error_out=False)
 
-import json
+    notifications = pagination.items
+
+    # Verifica se a requisição é via AJAX (usando o cabeçalho)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        notif_list = []
+        for notif in notifications:
+            notif_list.append({
+                'message': notif.message,
+                'timestamp': notif.timestamp.strftime('%d/%m/%Y %H:%M')
+            })
+        return jsonify(notifications=notif_list, has_next=pagination.has_next)
+
+    return render_template('notifications_historico.html', notifications=notifications)
+
 
 def criar_notificacao(user_id, tipo, mensagem, link=None, extra_data=None):
     if extra_data is None:

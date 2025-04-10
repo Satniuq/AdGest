@@ -1,22 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Histórico de Notificações{% endblock %}
 {% block content %}
-<div class="container">
+<div class="container" id="notifications-container">
   <h2 class="my-4">Histórico de Notificações</h2>
   {% if notifications %}
-    <ul class="list-group">
+    <ul id="notifications-list" class="list-group">
       {% for notif in notifications %}
         <li class="list-group-item">
           <strong>{{ notif.message }}</strong>
           <br><small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
-          {% if notif.link %}
-            <br><a href="{{ notif.link }}" class="btn btn-sm btn-primary mt-1">Ver</a>
-          {% endif %}
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    <p>Nenhuma notificação lida ainda.</p>
+    <p id="no-notifications">Nenhuma notificação lida ainda.</p>
+    <ul id="notifications-list" class="list-group"></ul>
   {% endif %}
+  <div id="loading" style="display: none; text-align: center; margin-top: 20px;">
+    <p>Carregando mais notificações...</p>
+  </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  let page = 1;
+  let loading = false;
+  let endOfList = false;
+
+  // Função para carregar notificações adicionais via AJAX
+  function loadNotifications() {
+    if (loading || endOfList) return;
+    loading = true;
+    page++;
+    document.getElementById("loading").style.display = "block";
+
+    fetch(`/notifications/historico?page=${page}`, { headers: { "X-Requested-With": "XMLHttpRequest" } })
+      .then(response => {
+        if (!response.ok) throw new Error('Erro ao carregar notificações');
+        return response.json();
+      })
+      .then(data => {
+        if (data.notifications && data.notifications.length > 0) {
+          const list = document.getElementById("notifications-list");
+          data.notifications.forEach(function(notif) {
+            const li = document.createElement("li");
+            li.className = "list-group-item";
+            li.innerHTML = `<strong>${notif.message}</strong><br><small class="text-muted">${notif.timestamp}</small>`;
+            list.appendChild(li);
+          });
+        } else {
+          endOfList = true;
+        }
+        loading = false;
+        document.getElementById("loading").style.display = "none";
+      })
+      .catch(error => {
+        console.error("Erro ao carregar notificações:", error);
+        loading = false;
+        document.getElementById("loading").style.display = "none";
+      });
+  }
+
+  // Detecta quando o usuário se aproxima do fim da página para acionar o carregamento
+  window.addEventListener("scroll", function() {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+      loadNotifications();
+    }
+  });
+});
+</script>
 {% endblock %}

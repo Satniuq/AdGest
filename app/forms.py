@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, DateField, IntegerField, SubmitField, TextAreaField, PasswordField, FloatField, SelectField
+from wtforms import StringField, DateField, IntegerField, SubmitField, TextAreaField, PasswordField, FloatField, SelectField, FileField
 from wtforms.validators import DataRequired, Optional, Length, ValidationError, Email
 from wtforms_sqlalchemy.fields import QuerySelectField
 from wtforms_sqlalchemy.fields import QuerySelectMultipleField
@@ -31,6 +31,27 @@ class RegistrationForm(FlaskForm):
     ], validators=[DataRequired()])
     submit = SubmitField('Registrar')
 #END FORM REGISTAR
+
+#BEGIN FORM EDIT PROFILE#
+class EditProfileForm(FlaskForm):
+    nickname = StringField(
+        'Nickname',
+        validators=[
+            DataRequired(message="O nickname é obrigatório"),
+            Length(min=3, max=50, message="O nickname deve ter entre 3 e 50 caracteres")
+        ]
+    )
+    email = StringField(
+        'Email',
+        validators=[
+            DataRequired(message="O email é obrigatório"),
+            Email(message="Digite um email válido!")
+        ]
+    )
+    # Campo para upload da imagem de perfil.
+    profile_image = FileField('Imagem de Perfil')
+    submit = SubmitField('Atualizar')
+#END FORM EDIT PROFILE#
 
 #BEGIN FORM LOGIN
 class LoginForm(FlaskForm):
