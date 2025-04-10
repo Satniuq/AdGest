@@ -7,7 +7,7 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "historico de clientes resolvido - ok"
+git commit -m "Reset password de login com envio de email - okk"
 
 #Eenvie as alterações com git push.
 

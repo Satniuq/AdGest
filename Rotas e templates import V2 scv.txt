@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualização de Clientes CSV{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Pré-visualização de Clientes CSV</h2>
+  
+  {% if conflitos %}
+    <div class="alert alert-warning">
+      <h5>Conflitos Identificados</h5>
+      <ul>
+        {% for msg in conflitos %}
+          <li>{{ msg }}</li>
+        {% endfor %}
+      </ul>
+      <p>Ao confirmar, os registros existentes serão atualizados com os novos dados do CSV.</p>
+    </div>
+  {% endif %}
+  
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Numero Interno</th>
+        <th>NIF</th>
+        <th>Endereço</th>
+        <th>Email</th>
+        <th>Telefone</th>
+        <th>Conflito</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+        <tr {% if row.conflict_reason %} class="table-warning" {% endif %}>
+          <td>{{ loop.index }}</td>
+          <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+          <td>{{ row.get('number_interno') or row.get('numero_interno') or row.get('numero') }}</td>
+          <td>{{ row.get('nif', '') }}</td>
+          <td>{{ row.get('address') or row.get('morada', 'Endereço') }}</td>
+          <td>{{ row.get('email', 'Email') }}</td>
+          <td>{{ row.get('telephone') or row.get('Telefone', '') }}</td>
+          <td>
+            {% if row.conflict_reason %}
+              <small class="text-danger">{{ row.conflict_reason }}</small>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <div class="d-flex justify-content-end gap-2">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <form method="POST">
+      <button type="submit" class="btn btn-primary">Confirmar Importação</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+
+{% extends "base.html" %}
+{% block title %}Pré-visualização Final de Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Pré-visualização Final de Clientes</h2>
+  <p class="text-muted">Confira os registros que serão importados/atualizados.</p>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Numero Interno</th>
+        <th>NIF</th>
+        <th>Endereço</th>
+        <th>Email</th>
+        <th>Telefone</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in all_records %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+        <td>{{ row.get('number_interno') or row.get('numero_interno') or row.get('numero') }}</td>
+        <td>{{ row.get('nif') }}</td>
+        <td>{{ row.get('address') or row.get('Endereço') }}</td>
+        <td>{{ row.get('Email') }}</td>
+        <td>{{ row.get('telephone') or row.get('Telefone') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex justify-content-end gap-2">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <form method="POST" action="{{ url_for('main.confirm_client_csv_import') }}">
+      <button type="submit" class="btn btn-primary">Confirmar Importação</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% extends "base.html" %}
+{% block title %}Conflitos CSV - Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Conflitos na Importação de Clientes</h2>
+  <div class="alert alert-warning">
+    <h5>Conflitos Identificados</h5>
+    <ul>
+      {% for row in conflicts %}
+        <li>Linha {{ loop.index }}: {{ row.conflict_reason }}</li>
+      {% endfor %}
+    </ul>
+    <p>Os registros conflitantes serão atualizados com os novos dados. Clique em “Confirmar e Substituir” para prosseguir.</p>
+  </div>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Número Interno</th>
+        <th>NIF</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in conflicts %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+        <td>{{ row.get('number_interno') or row.get('numero_interno') or row.get('numero') }}</td>
+        <td>{{ row.get('nif') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex justify-content-end gap-2">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <form method="POST" action="{{ url_for('main.final_preview_client_csv') }}">
+      <button type="submit" class="btn btn-primary">Confirmar e Substituir</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+
+#BEGIN MODEL CLIENTE
+class Client(db.Model):
+    __tablename__ = 'clients'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)  # unique=True removido
+    number_interno = db.Column(db.String(50), nullable=True)
+    nif = db.Column(db.String(50), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    telephone = db.Column(db.String(20), nullable=True)
+    
+    assuntos = db.relationship('Assunto', backref='client', lazy=True)
+    
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'name', name='uq_user_clientname'),
+    )
+    
+    # Relacionam
+
+@main.route('/upload_client_csv', methods=['GET', 'POST'])
+@login_required
+def upload_client_csv():
+    from app.accounting.forms import UploadCSVForm
+    form = UploadCSVForm()
+    if form.validate_on_submit():
+        file = form.csv_file.data
+        try:
+            sample = file.read(1024).decode('utf-8')
+            file.seek(0)
+            dialect = csv.Sniffer().sniff(sample)
+            stream = StringIO(file.read().decode('utf-8'))
+            reader = csv.DictReader(stream, dialect=dialect)
+            registros = []
+            for row in reader:
+                normalized_row = {normalize_header(k): (v.strip() if v else v) for k, v in row.items()}
+                registros.append(normalized_row)
+            flash(f"{len(registros)} registros foram lidos com sucesso.", "success")
+            session['client_csv_registros'] = registros
+            return redirect(url_for('main.preview_client_csv'))
+        except Exception as e:
+            flash("Erro ao processar o arquivo: " + str(e), "danger")
+    return render_template('upload_client_csv.html', form=form)
+
+@main.route('/preview_client_csv', methods=['GET', 'POST'])
+@login_required
+def preview_client_csv():
+    registros = session.get('client_csv_registros', [])
+    if not registros:
+        flash("Nenhum registro para pré-visualizar. Importe um arquivo primeiro.", "warning")
+        return redirect(url_for('main.upload_client_csv'))
+
+    conflitos = []
+    for idx, row in enumerate(registros, start=1):
+        client_name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+        address = (row.get('address') or row.get('morada') or 'Endereço').strip()
+        email = (row.get('email') or 'Email').strip()
+        telephone = (row.get('telephone') or row.get('tel') or '').strip()
+        if not client_name:
+            row['conflict_reason'] = f"Linha {idx}: Nome do cliente está vazio."
+            conflitos.append(row)
+            continue
+
+        existing_client = None
+        if number_interno:
+            existing_client = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+        if not existing_client:
+            existing_client = Client.query.filter_by(name=client_name, user_id=current_user.id).first()
+
+        conflict_msgs = []
+        if existing_client:
+            if number_interno and existing_client.number_interno and existing_client.number_interno != number_interno:
+                conflict_msgs.append(f"Já existe com número '{existing_client.number_interno}', CSV informa '{number_interno}'.")
+            if nif and existing_client.nif and existing_client.nif != nif:
+                conflict_msgs.append(f"Já existe com NIF '{existing_client.nif}', CSV informa '{nif}'.")
+        if conflict_msgs:
+            row['conflict_reason'] = " | ".join(conflict_msgs)
+            conflitos.append(row)
+
+    session['client_csv_registros_final'] = registros  # Grava todos (conflito + ok)
+    
+    # Se houver conflitos, renderiza o template de conflito; caso contrário, pula para o preview final.
+    if any('conflict_reason' in r for r in registros):
+        return render_template('conflict_client_csv.html', conflicts=conflitos, registros=registros)
+    else:
+        return redirect(url_for('main.final_preview_client_csv'))
+
+@main.route('/final_preview_client_csv', methods=['GET', 'POST'])
+@login_required
+def final_preview_client_csv():
+    registros = session.get('client_csv_registros_final', [])
+    if not registros:
+        flash("Nenhum registro para importar.", "warning")
+        return redirect(url_for('main.upload_client_csv'))
+    return render_template('final_client_csv_preview.html', all_records=registros)
+
+@main.route('/confirm_client_csv_import', methods=['POST'])
+@login_required
+def confirm_client_csv_import():
+    registros = session.get('client_csv_registros_final', [])
+    if not registros:
+        flash("Não há registros para importar.", "danger")
+        return redirect(url_for('main.upload_client_csv'))
+    
+    session.pop('client_csv_registros_final', None)
+    
+    imported_count = 0
+    for row in registros:
+        name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        if not name:
+            continue
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+        address = (row.get('address') or row.get('morada') or 'Endereço').strip()
+        email = (row.get('email') or 'Email').strip()
+        telephone = (row.get('telephone') or row.get('tel') or '').strip()
+        
+        client = None
+        if number_interno:
+            client = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+        if not client:
+            client = Client.query.filter_by(name=name, user_id=current_user.id).first()
+        
+        if not client:
+            client = Client(
+                user_id=current_user.id,
+                name=name,
+                number_interno=number_interno,
+                nif=nif,
+                address=address,
+                email=email,
+                telephone=telephone
+            )
+            db.session.add(client)
+        else:
+            client.number_interno = number_interno or client.number_interno
+            client.nif = nif or client.nif
+            client.address = address or client.address
+            client.email = email or client.email
+            client.telephone = telephone or client.telephone
+        imported_count += 1
+
+    try:
+        db.session.commit()
+        flash(f"{imported_count} clientes foram importados/atualizados com sucesso!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao importar clientes: {e}", "danger")
+    
+    return redirect(url_for('main.clientes'))
+
+
+
+
+
+
+
+

@@ -11,8 +11,9 @@ import os
 from datetime import datetime, date, timedelta
 # Bibliotecas de terceiros
 from flask import Blueprint, json, render_template, redirect, url_for, flash, request, current_app, session, jsonify
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask_login import login_user, logout_user, login_required, current_user
@@ -1289,31 +1290,15 @@ def create_client():
             flash(f"Erro ao criar cliente: {str(e)}", "danger")
     return render_template('create_client.html', form=form)
 
-@main.route('/cliente/delete/<int:client_id>', methods=['POST'])
-@login_required
-@admin_required  # Apenas administradores poderão excluir
-def delete_cliente(client_id):
-    client = Client.query.get_or_404(client_id)
-    try:
-        db.session.delete(client)
-        db.session.commit()
-        flash('Cliente excluído com sucesso!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f'Erro ao excluir cliente: {str(e)}')
-        flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
-    return redirect(url_for('main.clientes'))
-
 @main.route('/upload_client_csv', methods=['GET', 'POST'])
 @login_required
 def upload_client_csv():
-    # Reutilizamos o mesmo formulário de upload CSV que já usamos (UploadCSVForm)
     from app.accounting.forms import UploadCSVForm
     form = UploadCSVForm()
     if form.validate_on_submit():
         file = form.csv_file.data
         try:
-            # Detecta o delimitador automaticamente
+            # Lê e processa o CSV
             sample = file.read(1024).decode('utf-8')
             file.seek(0)
             dialect = csv.Sniffer().sniff(sample)
@@ -1321,10 +1306,11 @@ def upload_client_csv():
             reader = csv.DictReader(stream, dialect=dialect)
             registros = []
             for row in reader:
-                normalized_row = {normalize_header(k): (v.strip() if v else v) for k, v in row.items()}
+                normalized_row = {normalize_header(k): (v.strip() if v else '') for k, v in row.items()}
                 registros.append(normalized_row)
             flash(f"{len(registros)} registros foram lidos com sucesso.", "success")
             session['client_csv_registros'] = registros
+            # Direciona para a pré-visualização
             return redirect(url_for('main.preview_client_csv'))
         except Exception as e:
             flash("Erro ao processar o arquivo: " + str(e), "danger")
@@ -1337,72 +1323,60 @@ def preview_client_csv():
     if not registros:
         flash("Nenhum registro para pré-visualizar. Importe um arquivo primeiro.", "warning")
         return redirect(url_for('main.upload_client_csv'))
-
-    errors = []
-    # Verificações para cada registro
-    for idx, row in enumerate(registros, start=1):
-        # Tenta obter o nome do cliente a partir de várias possíveis chaves
-        client_name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
-        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
-        nif = (row.get('nif') or '').strip()
-        if not client_name:
-            errors.append(f"Linha {idx}: Nome do cliente está vazio.")
-            continue
-
-        # Procura cliente pelo nome
-        existing_client = Client.query.filter_by(name=client_name, user_id=current_user.id).first()
-        if existing_client:
-            # Se o CSV fornece número e o cliente existente tem número diferente, alerta erro
-            if number_interno and existing_client.number_interno and existing_client.number_interno != number_interno:
-                errors.append(f"Linha {idx}: Cliente '{client_name}' já existe com número '{existing_client.number_interno}', mas o CSV informa '{number_interno}'.")
-            # Verifica o NIF: se o CSV fornece NIF e o existente tem um NIF diferente, alerta erro
-            if nif and existing_client.nif and existing_client.nif != nif:
-                errors.append(f"Linha {idx}: Cliente '{client_name}' já existe com NIF '{existing_client.nif}', mas o CSV informa '{nif}'.")
-        # Se o número interno já existir associado a outro cliente (nome diferente), alerta erro
-        if number_interno:
-            client_with_num = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
-            if client_with_num and client_with_num.name.lower() != client_name.lower():
-                errors.append(f"Linha {idx}: O número interno '{number_interno}' já pertence a '{client_with_num.name}', mas o CSV indica '{client_name}'.")
-        # Verifica duplicação do NIF: se o NIF já existe associado a outro cliente com nome diferente
-        if nif:
-            client_with_nif = Client.query.filter_by(nif=nif, user_id=current_user.id).first()
-            if client_with_nif and client_with_nif.name.lower() != client_name.lower():
-                errors.append(f"Linha {idx}: O NIF '{nif}' já pertence a '{client_with_nif.name}', mas o CSV indica '{client_name}'.")
-
-    if request.method == 'POST':
-        if errors:
-            flash("Existem erros que precisam ser corrigidos antes de confirmar a importação.", "danger")
-        else:
-            # Renderiza um template intermediário de confirmação, passando os registros para revisão
-            return render_template('confirm_client_csv_import.html', registros=registros)
-    return render_template('preview_client_csv.html', registros=registros, errors=errors)
+    # Neste exemplo não vamos separar conflitos – aplicamos as regras na importação.
+    return render_template('preview_client_csv.html', registros=registros)
 
 @main.route('/confirm_client_csv_import', methods=['POST'])
 @login_required
 def confirm_client_csv_import():
     registros = session.get('client_csv_registros', [])
     if not registros:
-        flash("Não há registros na sessão para importar.", "danger")
+        flash("Não há registros para importar.", "danger")
         return redirect(url_for('main.upload_client_csv'))
+    
+    # Remove os registros da sessão para evitar reprocessamento
     session.pop('client_csv_registros', None)
+    
     imported_count = 0
     for row in registros:
-        # Obter nome do cliente a partir de possíveis chaves
+        # Extração dos campos (garanta que normalize_header está adequado)
         name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
         if not name:
             continue
         number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
         nif = (row.get('nif') or '').strip()
-        address = (row.get('address') or row.get('morada') or '').strip()
+        address = (row.get('endereço') or row.get('morada') or row.get('address') or row.get('endereco') or '').strip()
         email = (row.get('email') or '').strip()
-        telephone = (row.get('telephone') or row.get('tel') or '').strip()
-
-        # Procura o cliente pelo nome e usuário
-        client = Client.query.filter_by(name=name, user_id=current_user.id).first()
-        if not client:
+        telephone = (row.get('telefone') or row.get('telephone') or row.get('tel') or '').strip()
+        
+        client = None
+        # Se houver NIF, procura por cliente com esse NIF
+        if nif:
+            client = Client.query.filter_by(nif=nif, user_id=current_user.id).first()
+        # Se não encontrou e houver número_interno, usa esse campo
+        if not client and number_interno:
+            client = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+        
+        if client:
+            # Mesmo se o nome for diferente, se os identificadores forem iguais, atualiza todos os dados.
+            client.name = name
+            client.number_interno = number_interno or client.number_interno
+            client.nif = nif or client.nif
+            client.address = address or client.address
+            client.email = email or client.email
+            client.telephone = telephone or client.telephone
+        else:
+            # Caso não seja encontrado por NIF ou número_interno, tenta encontrar por nome
+            existing_by_name = Client.query.filter_by(name=name, user_id=current_user.id).first()
+            if existing_by_name:
+                # Se já existir um cliente com o mesmo nome, mas os identificadores (NIF/numero_interno) não correspondem,
+                # cria um novo cliente com o nome alterado para evitar conflitos com UNIQUE.
+                new_name = "(1) " + name
+            else:
+                new_name = name
             client = Client(
                 user_id=current_user.id,
-                name=name,
+                name=new_name,
                 number_interno=number_interno,
                 nif=nif,
                 address=address,
@@ -1410,26 +1384,17 @@ def confirm_client_csv_import():
                 telephone=telephone
             )
             db.session.add(client)
-        else:
-            # Atualiza se o campo estiver vazio
-            if number_interno and not client.number_interno:
-                client.number_interno = number_interno
-            if nif and not client.nif:
-                client.nif = nif
-            if address and not client.address:
-                client.address = address
-            if email and not client.email:
-                client.email = email
-            if telephone and not client.telephone:
-                client.telephone = telephone
         imported_count += 1
+
     try:
         db.session.commit()
-        flash(f"{imported_count} clientes importados com sucesso!", "success")
+        flash(f"{imported_count} clientes foram importados/atualizados com sucesso!", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Erro ao importar clientes: {e}", "danger")
+    
     return redirect(url_for('main.clientes'))
+
 
 @main.route('/client_info/<int:client_id>')
 @login_required
@@ -1720,7 +1685,7 @@ def billing():
             else:
                 flash("Tipo de item inválido.", "danger")
                 return redirect(url_for('main.billing'))
-        
+        #Processar cada grupo
         for client_id, items in client_groups.items():
             total_hours = 0
             details_lines = []
@@ -1776,6 +1741,7 @@ def billing():
                     detalhe_prazo += f"\n     [Prazo] Horas adicionadas: {reg.horas_adicionadas}h por usuário {usuario.username} em {reg.timestamp.strftime('%d/%m/%Y %H:%M')}"
                 details_lines.append(detalhe_prazo)
             
+            #Criar nota de honorários para o current user
             nota = NotaHonorarios(
                 user_id=current_user.id,
                 client_id=client_id,
@@ -1794,9 +1760,17 @@ def billing():
             # Construa o conjunto de envolvidos (incluindo o dono e os compartilhados)
             envolvidos = set(shared_users + [client_owner])
             
+            # Para cada usuário diferente do current_user, cria uma cópia da nota e envia notificação
             for u in envolvidos:
-                # Notifica todos, exceto quem gerou a nota
                 if u.id != current_user.id:
+                    nota_copia = NotaHonorarios(
+                        user_id=u.id,
+                        client_id=client_id,
+                        total_hours=total_hours,
+                        details="\n".join(details_lines),
+                        is_confirmed=True
+                    )
+                    db.session.add(nota_copia)
                     mensagem = f"{current_user.nickname} gerou nota de honorários para o cliente {shared_client.name}."
                     link = url_for('main.client_info', client_id=shared_client.id)
                     criar_notificacao(u.id, "billing", mensagem, link)
@@ -1870,17 +1844,30 @@ def billing():
 @login_required
 def billing_historico():
     page = request.args.get('page', 1, type=int)
-    query = NotaHonorarios.query.filter(
-        or_(
-            NotaHonorarios.user_id == current_user.id,
-            NotaHonorarios.client.has(Client.user_id == current_user.id),
-            NotaHonorarios.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
+    
+    from sqlalchemy.orm import aliased
+
+    ClientAlias = aliased(Client)
+
+    # Subquery para os números internos dos clientes pertencentes ao current_user
+    subq = db.session.query(Client.number_interno).filter(Client.user_id == current_user.id).subquery()
+    subq_select = select(subq)
+
+    query = (
+        NotaHonorarios.query
+        .join(ClientAlias, NotaHonorarios.client_id == ClientAlias.id)
+        .filter(
+            or_(
+                ClientAlias.user_id == current_user.id,
+                ClientAlias.number_interno.in_(subq_select)
+            )
         )
     )
-    # Filtros
+    # Filtros adicionais
     cliente = request.args.get('cliente', '').strip()
     if cliente:
-        query = query.join(NotaHonorarios.client).filter(Client.name.ilike(f"%{cliente}%"))
+        query = query.filter(func.lower(ClientAlias.name).ilike(func.lower(f"%{cliente}%")))
+
     data_emissao = request.args.get('data_emissao', '').strip()
     if data_emissao:
         try:
@@ -1889,6 +1876,7 @@ def billing_historico():
             query = query.filter(NotaHonorarios.created_at >= dt)
         except ValueError:
             pass
+
     min_horas = request.args.get('min_horas', '').strip()
     if min_horas:
         try:
@@ -1896,6 +1884,11 @@ def billing_historico():
             query = query.filter(NotaHonorarios.total_hours >= min_horas)
         except ValueError:
             pass
+
+    # Filtro pelo título (assunto/prazo) - se necessário:
+    titulo = request.args.get('titulo', '').strip()
+    if titulo:
+        query = query.filter(NotaHonorarios.details.ilike(f"%{titulo}%"))
 
     query = query.order_by(NotaHonorarios.created_at.desc())
     pagination = query.paginate(page=page, per_page=5)

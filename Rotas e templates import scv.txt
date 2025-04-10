@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualização Final de Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Pré-visualização Final de Clientes</h2>
+  <p class="text-muted">Abaixo estão todos os registros que serão importados/atualizados.</p>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Número Interno</th>
+        <th>NIF</th>
+        <th>Morada</th>
+        <th>Email</th>
+        <th>Telefone</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in all_records %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+        <td>{{ row.get('number_interno') or row.get('numero_interno') }}</td>
+        <td>{{ row.get('nif') }}</td>
+        <td>{{ row.get('address') or row.get('morada') }}</td>
+        <td>{{ row.get('email') }}</td>
+        <td>{{ row.get('telephone') or row.get('tel') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex justify-content-end gap-2">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <form method="POST" action="{{ url_for('main.confirm_client_csv_import') }}">
+      <button type="submit" class="btn btn-primary">Confirmar Importação</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+
+end
+begin
+
+{% extends "base.html" %}
+{% block title %}Pré-visualização de Clientes CSV{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Pré-visualização de Clientes CSV</h2>
+
+  {% if conflicts %}
+    <div class="alert alert-warning">
+      <h5>Conflitos Identificados:</h5>
+      <ul>
+        {% for msg in conflicts %}
+          <li>{{ msg }}</li>
+        {% endfor %}
+      </ul>
+      <p>Você deseja confirmar a importação e substituir os dados existentes?</p>
+    </div>
+  {% endif %}
+
+  <!-- Exibir os registros para pré-visualização -->
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Número Interno</th>
+        <th>NIF</th>
+        <th>Morada</th>
+        <th>Email</th>
+        <th>Telefone</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+          <td>{{ row.get('number_interno') or row.get('numero_interno') or row.get('numero') }}</td>
+          <td>{{ row.get('nif', '') }}</td>
+          <td>{{ row.get('address') or row.get('morada', '') }}</td>
+          <td>{{ row.get('email', '') }}</td>
+          <td>{{ row.get('telephone') or row.get('tel', '') }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="POST">
+    <button type="submit" class="btn btn-primary">Confirmar e Substituir</button>
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}
+
+end
+begin
+
+{% extends "base.html" %}
+{% block title %}Conflitos CSV - Clientes{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Conflitos na Importação de Clientes</h2>
+  <p class="text-muted">Os registros abaixo apresentam conflitos com os dados já existentes.</p>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Número Interno</th>
+        <th>NIF</th>
+        <th>Conflito</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in conflicts %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+        <td>{{ row.get('number_interno') or row.get('numero_interno') }}</td>
+        <td>{{ row.get('nif') }}</td>
+        <td><small class="text-danger">{{ row.conflict_reason }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex justify-content-end gap-2">
+    <a href="{{ url_for('main.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <form method="POST" action="{{ url_for('main.final_preview_client_csv') }}">
+      <button type="submit" class="btn btn-primary">Confirmar e Substituir</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+end
+begin
+
+@main.route('/upload_client_csv', methods=['GET', 'POST'])
+@login_required
+def upload_client_csv():
+    # Reutilizamos o mesmo formulário de upload CSV que já usamos (UploadCSVForm)
+    from app.accounting.forms import UploadCSVForm
+    form = UploadCSVForm()
+    if form.validate_on_submit():
+        file = form.csv_file.data
+        try:
+            # Detecta o delimitador automaticamente
+            sample = file.read(1024).decode('utf-8')
+            file.seek(0)
+            dialect = csv.Sniffer().sniff(sample)
+            stream = StringIO(file.read().decode('utf-8'))
+            reader = csv.DictReader(stream, dialect=dialect)
+            registros = []
+            for row in reader:
+                normalized_row = {normalize_header(k): (v.strip() if v else v) for k, v in row.items()}
+                registros.append(normalized_row)
+            flash(f"{len(registros)} registros foram lidos com sucesso.", "success")
+            session['client_csv_registros'] = registros
+            return redirect(url_for('main.preview_client_csv'))
+        except Exception as e:
+            flash("Erro ao processar o arquivo: " + str(e), "danger")
+    return render_template('upload_client_csv.html', form=form)
+
+@main.route('/preview_client_csv', methods=['GET', 'POST'])
+@login_required
+def preview_client_csv():
+    registros = session.get('client_csv_registros', [])
+    if not registros:
+        flash("Nenhum registro para pré-visualizar. Importe um arquivo primeiro.", "warning")
+        return redirect(url_for('main.upload_client_csv'))
+
+    # Listas para armazenar os registros
+    registros_conflitantes = []
+    registros_ok = []
+
+    for idx, row in enumerate(registros, start=1):
+        client_name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+
+        # Checa se o registro está vazio (sem nome)
+        if not client_name:
+            # Consideramos isso um "conflito" para que usuário veja
+            row['conflict_reason'] = f"Linha {idx}: Nome do cliente está vazio."
+            registros_conflitantes.append(row)
+            continue
+
+        # Tenta localizar o cliente existente
+        existing_client = None
+        if number_interno:
+            existing_client = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+        if not existing_client:
+            existing_client = Client.query.filter_by(name=client_name, user_id=current_user.id).first()
+
+        conflict_msg = []
+        if existing_client:
+            # Comparar number_interno
+            if number_interno and existing_client.number_interno and existing_client.number_interno != number_interno:
+                conflict_msg.append(
+                    f"Cliente '{client_name}' já existe com número '{existing_client.number_interno}', mas o CSV informa '{number_interno}'."
+                )
+            # Comparar NIF
+            if nif and existing_client.nif and existing_client.nif != nif:
+                conflict_msg.append(
+                    f"Cliente '{client_name}' já existe com NIF '{existing_client.nif}', mas o CSV informa '{nif}'."
+                )
+
+        if conflict_msg:
+            row['conflict_reason'] = " | ".join(conflict_msg)
+            registros_conflitantes.append(row)
+        else:
+            # Caso não haja conflito, adiciona na lista de OK
+            registros_ok.append(row)
+
+    # Armazena ambas as listas na sessão
+    session['client_csv_registros_ok'] = registros_ok
+    session['client_csv_registros_conflicts'] = registros_conflitantes
+
+    # Se não houver conflitos, pule direto para o Passo 2 (final_preview)
+    if not registros_conflitantes:
+        return redirect(url_for('main.final_preview_client_csv'))
+
+    # Caso existam conflitos, exiba a página (Passo 1)
+    return render_template('conflict_client_csv.html', conflicts=registros_conflitantes)
+
+@main.route('/final_preview_client_csv', methods=['GET', 'POST'])
+@login_required
+def final_preview_client_csv():
+    # Se for GET, pode vir direto (caso não haja conflitos),
+    # se for POST, é a confirmação de que pode sobrescrever os dados conflitantes.
+    
+    registros_ok = session.get('client_csv_registros_ok', [])
+    registros_conflicts = session.get('client_csv_registros_conflicts', [])
+    if request.method == 'POST':
+        # O usuário confirmou que quer sobrescrever os conflitos
+        # Não há necessidade de tratamento adicional aqui, pois a lógica de substituição
+        # será na rota final de import.
+        pass
+    
+    # Exibe todos os registros que serão importados
+    # (junta ok e conflituantes)
+    all_registros = registros_ok + registros_conflicts
+    if not all_registros:
+        flash("Nenhum registro para importar.", "warning")
+        return redirect(url_for('main.upload_client_csv'))
+
+    return render_template('final_client_csv_preview.html', all_records=all_registros)
+
+@main.route('/confirm_client_csv_import', methods=['POST'])
+@login_required
+def confirm_client_csv_import():
+    registros_ok = session.get('client_csv_registros_ok', [])
+    registros_conflicts = session.get('client_csv_registros_conflicts', [])
+    
+    # Junte tudo
+    all_records = registros_ok + registros_conflicts
+    if not all_records:
+        flash("Não há registros para importar.", "danger")
+        return redirect(url_for('main.upload_client_csv'))
+
+    # Apaga da sessão
+    session.pop('client_csv_registros_ok', None)
+    session.pop('client_csv_registros_conflicts', None)
+    session.pop('client_csv_registros', None)  # se quiser limpar também
+
+    imported_count = 0
+    for row in all_records:
+        name = (row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') or '').strip()
+        if not name:
+            continue
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or row.get('numero') or '').strip()
+        nif = (row.get('nif') or '').strip()
+        address = (row.get('address') or row.get('morada') or '').strip()
+        email = (row.get('email') or '').strip()
+        telephone = (row.get('telephone') or row.get('tel') or '').strip()
+
+        # Tentar localizar cliente existente
+        client = None
+        if number_interno:
+            client = Client.query.filter_by(number_interno=number_interno, user_id=current_user.id).first()
+        if not client:
+            client = Client.query.filter_by(name=name, user_id=current_user.id).first()
+
+        if not client:
+            client = Client(
+                user_id=current_user.id,
+                name=name,
+                number_interno=number_interno,
+                nif=nif,
+                address=address,
+                email=email,
+                telephone=telephone
+            )
+            db.session.add(client)
+        else:
+            if number_interno:
+                client.number_interno = number_interno
+            if nif:
+                client.nif = nif
+            if address:
+                client.address = address
+            if email:
+                client.email = email
+            if telephone:
+                client.telephone = telephone
+
+        imported_count += 1
+
+    try:
+        db.session.commit()
+        flash(f"{imported_count} clientes foram importados/atualizados com sucesso!", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erro ao importar clientes: {e}", "danger")
+
+    return redirect(url_for('main.clientes'))
+
+
