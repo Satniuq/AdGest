@@ -12,3 +12,5 @@
 2025-04-11 12:54:00,748 INFO: Tipo de form.profile_image.data: <class 'werkzeug.datastructures.file_storage.FileStorage'> [in C:\Python\AdGest\app\routes.py:62]
 2025-04-11 12:54:00,755 INFO: Arquivo recebido: <FileStorage: '9deb08cbac490f5fa43032499f61c581.jpg' ('image/jpeg')> [in C:\Python\AdGest\app\routes.py:65]
 2025-04-11 12:54:00,757 INFO: Salvando imagem em: C:\Python\AdGest\app\static\icons\9deb08cbac490f5fa43032499f61c581.jpg [in C:\Python\AdGest\app\routes.py:70]
+2025-04-11 20:30:12,290 INFO: Debug AdGest startup [in C:\Python\AdGest\app\__init__.py:110]
+2025-04-11 20:30:13,370 INFO: Debug AdGest startup [in C:\Python\AdGest\app\__init__.py:110]

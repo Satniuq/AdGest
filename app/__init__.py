@@ -98,16 +98,21 @@ def create_app():
 
     
     # Configuração de logging
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
-    file_handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
-    ))
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
-    app.logger.setLevel(logging.INFO)
-    app.logger.info('Debug AdGest startup')
+    # Se estiver em ambiente de desenvolvimento (DEBUG=True) ou não estiver no App Engine, cria log em arquivo.
+    if app.config.get("DEBUG") or os.environ.get("GAE_INSTANCE") is None:
+        if not os.path.exists('logs'):
+            os.mkdir('logs')
+        file_handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+        ))
+        file_handler.setLevel(logging.INFO)
+        app.logger.addHandler(file_handler)
+        app.logger.info('Debug AdGest startup')
+    else:
+        # Em ambiente de produção (App Engine), não escrevemos logs em arquivo, pois o sistema é somente leitura.
+        # O App Engine coleta o stdout/stderr automaticamente.
+        app.logger.info('Production startup – logs will be sent to stdout')
 
     @app.context_processor
     def inject_today():

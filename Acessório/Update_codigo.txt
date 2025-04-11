@@ -7,7 +7,7 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "Logo AdGest e layout pagina login e index e alteraçoes ao CSS 2"
+git commit -m "Cria ficheiro app.yaml e atualiza requirements para incluir gunicorn"
 
 #Eenvie as alterações com git push.
 
