@@ -7,7 +7,7 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "import clientes por csv - ok"
+git commit -m "Logo AdGest e layout pagina login e index e alteraçoes ao CSS"
 
 #Eenvie as alterações com git push.
 

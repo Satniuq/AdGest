@@ -1,12 +1,6 @@
-+++++++
-USUARIOS
-
-Falta template para usuário, para se ver e editar as informações. E no menu devia haver um campo para user (com o nickname do user que estiver logado) que fosse ter a pagina do user. 
 
 ++++
 NOTIFICAÇÕES
-
-Notificação quando se adiciona comentário num assunto partilhado
 
 VERIFICAÇÃO DAS NOTIFICAÇÕES:
 	1 - Partilha de cliente não existente - aparece botão verificar e manda para pagina verificar e cria cliente novo - OK
@@ -22,16 +16,9 @@ VERIFICAÇÃO DAS NOTIFICAÇÕES:
 	12 - excluir tarefa partilhada em assunto - ok
 	13 - criar tarefa - ok
 	14 - gerar nota honorários - criador da nota recebe notificação
+	14-A - FALTA: os não criadores, mas que estão em partilha, tabem receberem notificacao
 
-FALTA: os não criadores, mas que estão em partilha, tabem receberem notificacao
-
-
-+++++++
-HISTÓRICO DAS NOTIFICAÇÕES
-
-Os botões ver deviam desaparecer
-
-Filtro por cliente, processo e user de partilha
+Notificação quando se adiciona comentário num assunto partilhado
 
 
 +++++++++++++
@@ -44,28 +31,4 @@ Botão voltar voltar a página anterior
 REGRAS DE SEGURANÇA
 
 Quando fecho o terminal devia terminar a sessão
-
-+++++++++++
-HISTÓRIC DE NOTAS DE HONORÁRIOS
-
-Os números das notas recomeçam em cada pagina, deviam ser contínuos e não quebrar por pagina
-
-
-+++++++++
-CLIENTES
-
-
-acho que ja está tudo, mas verificar se na partilha de clientes por CSV, qual é a regra para resolver conflitos de clientes ja existentes e se há fragilidades. A lógica devia ser - cliente novo (se numero interno não for igual) cria cliente novo, como está; cliente já existente (numero interno igual) com dados iguais, corrige com dados novos 
-
-
-
-+++++++
-HISTÓRICO DE BILLING
-
-Problema: no histórico do billing só aparecem as notas emitidas de itens criados pelo user e deviam aparecer as notas de itens em partilha, tanto criadas por outros users e partilhadas com o user, como criadas pelo user e partilhadas com outros users.
-
-
-
-
-
 

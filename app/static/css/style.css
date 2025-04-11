@@ -1,6 +1,18 @@
+/* Definição de Variáveis - Paleta de Cores */
+:root {
+  --bg-default: #f4f4f4;       /* Fundo padrão para o body */
+  --bg-primary: #557500;       /* Cor primária: usada no fundo do index/login e em outros elementos */
+  --text-default: #737373;     /* Cor do texto padrão */
+  --btn-primary: #f2af29;      /* Cor para botões primários */
+  --btn-primary-hover: #e09b22;/* Hover para botões primários */
+  --btn-success: #6a8b3e;       /* Exemplo: botão de sucesso */
+  --btn-danger: #ce1212;        /* Exemplo: botão de perigo */
+  --border-highlight: #FFA500; /* Destaque para itens compartilhados */
+}
+
 /* Global */
 body {
-  background-color: #f8f9fa;
+  background-color: var(--bg-default);
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -21,7 +33,7 @@ body {
 /* Cards (para os assuntos) */
 .card {
   margin-bottom: 20px;
-}python
+}
 
 .card-header {
   background-color: #e9ecef;
@@ -58,6 +70,17 @@ table {
   border: 1px solid #ccc;
 }
 
+/* Botão primary custom (sobrescreve o padrão do Bootstrap, se utilizado) */
+.btn-primary {
+  background-color: var(--btn-primary) !important;
+  border-color: var(--btn-primary) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--btn-primary-hover) !important;
+  border-color: var(--btn-primary-hover) !important;
+}
+
 /* Separadores e bordas */
 .border-end {
   border-right: 1px solid #dee2e6;
@@ -83,7 +106,6 @@ table {
 }
 
 /* Personalização extra para layout de index */
-
 /* Para a coluna de prazos (esquerda) */
 .col-md-3 .list-group-item {
   padding: 10px;
@@ -98,7 +120,6 @@ table {
 .dropdown-menu .dropdown-item {
   font-size: 0.9rem;
 }
-
 
 /* Ajuste nos botões de ação dos cards */
 .card-header .btn {
@@ -117,7 +138,7 @@ table {
 
 /* Indicador visual para itens compartilhados */
 .shared-item {
-  border-left: 4px solid #FFA500; /* Cor laranja para destacar */
+  border-left: 4px solid var(--border-highlight);
   padding-left: 4px;
 }
 
@@ -139,3 +160,109 @@ table {
   border-radius: 5px;
 }
 
+/* Cor de fundo do Template Index */
+body.index-page {
+  background-color: var(--bg-primary) !important;
+}
+
+/* Cor de fundo do Template Login */
+body.login-page {
+  background-color: var(--bg-primary) !important;
+}
+
+/* Container que abrange as duas áreas (login) */
+.login-container {
+  display: flex;
+  width: 100%;
+  height: 100vh;        /* Ocupa a altura total da viewport */
+  overflow: hidden;
+  transition: all 0.5s ease;
+}
+
+/* Área da esquerda: Logo */
+.left-panel {
+  flex: 0 0 100%;       /* Inicialmente ocupa 100% da largura */
+  transition: flex-basis 0.5s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--bg-primary); /* Usa a cor primária */
+}
+
+/* Área da direita: Formulário de login */
+.right-panel {
+  flex: 0 0 0;          /* Inicialmente oculta (0% da largura) */
+  transition: flex-basis 0.5s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--bg-default); /* Usa o fundo padrão */
+}
+
+/* Ao passar o mouse sobre o contêiner, ajustar as larguras: */
+.login-container:hover .left-panel {
+  flex: 0 0 66.67%;     /* A área da esquerda passa a ocupar 2/3 da tela */
+}
+
+.login-container:hover .right-panel {
+  flex: 0 0 33.33%;     /* A área da direita passa a ocupar 1/3 da tela */
+}
+
+/* Ajuste para a imagem (logo) na área da esquerda */
+.left-panel .logo {
+  max-width: 80%;
+  height: auto;
+}
+
+/* Para a página de login, remover margens/paddings da .container */
+.login-page .container {
+  margin-top: 0 !important;
+  padding: 0 !important;
+}
+
+/* Se precisar remover margens extras que venham do row ou col */
+.login-page .row,
+.login-page .col-md-6,
+.login-page .col-md-12 {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/*classe para botão ver tarefas*/
+.btn-dashboard {
+  background-color: #737373 !important;
+  border-color: #737373 !important;
+  color: #fff;
+}
+
+.btn-dashboard:hover {
+  background-color: #666666 !important;
+  border-color: #666666 !important;
+}
+
+/* Botão Reverter com cor específica */
+.btn-reverter {
+  background-color: #737373 !important;
+  border-color: #737373 !important;
+  color: #fff !important;
+}
+
+.btn-reverter:hover {
+  background-color: #666666 !important;
+  border-color: #666666 !important;
+}
+
+/* Botão Detalhes no historico do billing grouped*/
+.btn-detalhes {
+  background-color: #6a8b3e !important;
+  border-color: #6a8b3e !important;
+  color: #fff !important;
+  transition: background-color 0.3s ease;
+}
+
+.btn-detalhes:hover {
+  background-color: #5f7e34 !important;
+  border-color: #5f7e34 !important;
+}

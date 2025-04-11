@@ -2,7 +2,10 @@
 <html lang="pt">
   <head>
     <meta charset="utf-8">
-    <title>{% block title %}AdGest{% endblock %}</title>
+    <title>{% block title %}{{ page_title|default("Minha Aplicação") }}{% endblock %}</title>
+
+    <!-- Favicon: mostra o logo no lugar do texto na aba -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/logo_pag.png') }}">
 
     <!-- FontAwesome (ou outra biblioteca de ícones) -->
     <link
@@ -20,29 +23,24 @@
     <!-- Seu CSS customizado (opcional) -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   </head>
-  <body>
+  <body class="{% block body_class %}{% endblock %}">
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light">
       <div class="container-fluid">
-        <!--Avatar de cada usuário-->
-        <div class="navbar-brand d-flex align-items-center">
-          <a href="{{ url_for('main.index') }}" class="text-decoration-none text-dark">
-            AdGest
-          </a>
-          {% if current_user.is_authenticated and current_user.profile_image %}
-            <a href="{{ url_for('main.profile') }}" class="ms-2">
-              <img src="{{ url_for('static', filename='icons/' ~ current_user.profile_image) }}"
-                   alt="Avatar" class="img-thumbnail"
-                   style="width: 40px; height: 40px; object-fit: cover; border-radius: 50%;">
-            </a>
-          {% endif %}
-        </div>        
+        <!-- Logo na Navbar -->
+        <a href="{{ url_for('main.index') }}" class="navbar-brand d-flex align-items-center">
+          <img src="{{ url_for('static', filename='icons/logo_pag.png') }}"
+               alt="Logo AdGest"
+               style="width: 100px; height: 100px; object-fit: cover">
+        </a>
+               
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
                 aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
           <ul class="navbar-nav ms-auto">
+           <!--notificações--> 
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="fa-solid fa-bell"></i>
@@ -77,7 +75,8 @@
                   </a>
                 </li>
               </ul>                           
-            </li>            
+            </li>
+            <!--botão gestão diária-->            
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('main.dashboard') }}">Gestão Diária</a>
             </li>
@@ -105,6 +104,14 @@
                   <a class="nav-link" href="{{ url_for('main.register') }}">Registrar</a>
                 </li>
               {% endif %}
+              {% if current_user.is_authenticated and current_user.profile_image %}
+              <a href="{{ url_for('main.profile') }}" class="ms-2">
+                <img src="{{ url_for('static', filename='icons/' ~ current_user.profile_image) }}"
+                    alt="Avatar" class="img-thumbnail"
+                    style="width: 40px; height: 40px; object-fit: cover; border-radius: 50%;">
+              </a>
+            {% endif %}
+            </div> 
             {% else %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('main.login') }}">Login</a>

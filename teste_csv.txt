@@ -1,3 +1,0 @@
-﻿numero;data_emissao;data_vencimento;tipo;valor;advogado;historico;status;numero_recibo;numero_cliente;client
-1;01/03/2023;15/03/2023;fatura;1000.50;Dr. Silva;Documento de teste;pendente;;12345;Cliente A
-2;05/03/2023;20/03/2023;despesa;500.00;Dr. Sousa;Documento despesa;pendente;;67890;Cliente B

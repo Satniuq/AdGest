@@ -272,8 +272,10 @@
                 | <i class="fa-solid fa-clock"></i> {{ total_horas|default(0) }}h
               </p>
               <!-- Botão para mostrar Tarefas -->
-              <button class="btn btn-primary mb-2" type="button" data-bs-toggle="collapse"
-                      data-bs-target="#tarefas-{{ assunto.id }}" aria-expanded="false" aria-controls="tarefas-{{ assunto.id }}">
+              <button class="btn btn-primary btn-dashboard mb-2" type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#tarefas-{{ assunto.id }}"
+                      aria-expanded="false" aria-controls="tarefas-{{ assunto.id }}">
                 <i class="fa-solid fa-eye"></i> Tarefas
               </button>
               <div class="collapse" id="tarefas-{{ assunto.id }}">

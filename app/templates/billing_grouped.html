@@ -39,7 +39,7 @@
                                                 <strong>{{ a_data.assunto.nome_assunto }}</strong>
                                                 - Horas (tarefas): {{ a_data.tarefas|map(attribute='horas')|sum }}h
                                             </label>
-                                            <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('assunto', {{ a_data.assunto.id }}); return false;">Reverter</a>
+                                            <a href="#" class="btn btn-sm btn-reverter" onclick="revertItem('assunto', {{ a_data.assunto.id }}); return false;">Reverter</a>
                                         </div>
                                         {% if a_data.tarefas %}
                                             <ul class="ms-3">
@@ -51,7 +51,7 @@
                                                                 <strong>{{ tarefa.nome_tarefa }}</strong> – {{ tarefa.horas }}h
                                                                 (Concluída: {% if tarefa.data_conclusao %}{{ tarefa.data_conclusao.strftime('%d/%m/%Y') }}{% else %}N/A{% endif %})
                                                             </label>
-                                                            <a href="#" class="btn btn-sm btn-warning" onclick="revertItem('tarefa', {{ tarefa.id }}); return false;">Reverter</a>
+                                                            <a href="#" class="btn btn-sm btn-reverter" onclick="revertItem('tarefa', {{ tarefa.id }}); return false;">Reverter</a>
                                                         </div>
                                                     </li>
                                                 {% endfor %}
@@ -143,10 +143,10 @@
                                       <td>{{ nota.total_hours }}h</td>
                                       <td>{{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                                       <td>
-                                          <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#notaModal{{ nota.id }}">
-                                              Detalhes
-                                          </button>
-                                      </td>
+                                        <button class="btn btn-sm btn-detalhes" data-bs-toggle="modal" data-bs-target="#notaModal{{ nota.id }}">
+                                            Detalhes
+                                        </button>
+                                      </td>                                      
                                   </tr>
                                   
                                   <!-- Modal para Detalhes da Nota -->
