@@ -1,0 +1,8 @@
+runtime: python310
+
+env_variables:
+  FLASK_ENV: production
+  SECRET_KEY: "sua_chave_secreta_aqui"
+  # Se você estiver usando um banco de dados gerenciado em produção, coloque a variável DATABASE_URL aqui.
+
+entrypoint: gunicorn -b :$PORT run:app
