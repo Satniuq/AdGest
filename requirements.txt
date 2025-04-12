@@ -7,3 +7,5 @@ Flask-Mail
 WTForms
 WTForms-SQLAlchemy
 gunicorn
+pymysql
+
