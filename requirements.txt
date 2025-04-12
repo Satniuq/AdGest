@@ -4,6 +4,7 @@ Flask-Login
 Flask-Migrate
 Flask-WTF
 Flask-Mail
+email_validator
 WTForms
 WTForms-SQLAlchemy
 gunicorn

@@ -2,7 +2,7 @@
 :root {
   --bg-default: #f4f4f4;       /* Fundo padrão para o body */
   --bg-primary: #557500;       /* Cor primária: usada no fundo do index/login e em outros elementos */
-  --text-default: #737373;     /* Cor do texto padrão */
+  --text-default: #73737309;     /* Cor do texto padrão */
   --btn-primary: #f2af29;      /* Cor para botões primários */
   --btn-primary-hover: #e09b22;/* Hover para botões primários */
   --btn-success: #6a8b3e;       /* Exemplo: botão de sucesso */
