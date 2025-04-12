@@ -7,7 +7,7 @@ git add .
 
 #Faça um commit com git commit -m "Mensagem do commit"
 
-git commit -m "Cria ficheiro app.yaml e atualiza requirements para incluir gunicorn"
+git commit -m "Altera logging para nao correr em modo produçao2"
 
 #Eenvie as alterações com git push.
 

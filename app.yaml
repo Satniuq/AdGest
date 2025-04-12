@@ -2,7 +2,7 @@ runtime: python310
 
 env_variables:
   FLASK_ENV: production
-  SECRET_KEY: "sporting789?"  # aqui você coloca sua chave secreta
+  SECRET_KEY: "sua_chave_secreta_aqui"
   DATABASE_URL: "mysql+pymysql://db-adgest1:Sporting789@/adgest_db?unix_socket=/cloudsql/adgest:us-central1:db-adgest1"
 
 entrypoint: gunicorn -b :$PORT run:app

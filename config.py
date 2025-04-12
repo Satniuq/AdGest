@@ -2,12 +2,13 @@ import os
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
+    # Substitua 'sua_chave_secreta_aqui' por uma chave forte (você pode gerar uma com: python -c "import secrets; print(secrets.token_hex(16))")
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'sua_chave_secreta_aqui'
     
-    # A string de conexão será definida através da variável de ambiente DATABASE_URL.
-    # Em desenvolvimento, se DATABASE_URL não estiver definida, você pode optar por usar SQLite;
-    # mas para produção, defina essa variável.
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL')
+    # Conexão com o Cloud SQL via socket Unix, lendo a variável de ambiente DATABASE_URL.
+    # Em produção, DATABASE_URL deverá estar definida (veja o app.yaml).
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'mysql+pymysql://db-adgest1:Sporting789@/adgest_db?unix_socket=/cloudsql/adgest:us-central1:db-adgest1'
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(basedir, 'app', 'static', 'icons')
