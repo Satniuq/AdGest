@@ -5,14 +5,13 @@ from werkzeug.security import generate_password_hash
 app = create_app()
 
 with app.app_context():
-    # Verifica se já existe um usuário "admin"
     admin = User.query.filter_by(username='admin').first()
     if admin is None:
         admin = User(
             username='admin',
-            nickname='ADM',  # ou outro nickname curto desejado
+            nickname='ADM',  # ou outro nickname de sua escolha
             email='admin@example.com',
-            password=generate_password_hash('admin 1'),
+            password=generate_password_hash('admin1'),
             role='admin'
         )
         db.session.add(admin)

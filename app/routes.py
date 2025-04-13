@@ -30,6 +30,7 @@ from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
 from app.decorators import admin_required
 from app.decorators import handle_db_errors
 from app import db
+from app.gcs_helpers import upload_to_gcs
 #END FROM
 
 #BEGIN DEF
@@ -58,18 +59,25 @@ def edit_profile():
         current_user.email = form.email.data
 
         if form.profile_image.data:
-            # Log do que vem no campo de arquivo
-            current_app.logger.info(f"Tipo de form.profile_image.data: {type(form.profile_image.data)}")
-            # Se for um objeto FileStorage, ele deve ter o atributo filename
             file_data = form.profile_image.data
+            current_app.logger.info(f"Tipo de form.profile_image.data: {type(file_data)}")
             current_app.logger.info(f"Arquivo recebido: {repr(file_data)}")
             if hasattr(file_data, 'filename') and file_data.filename:
                 filename = secure_filename(file_data.filename)
-                upload_folder = current_app.config['UPLOAD_FOLDER']
-                upload_path = os.path.join(upload_folder, filename)
-                current_app.logger.info(f"Salvando imagem em: {upload_path}")
-                file_data.save(upload_path)
-                current_user.profile_image = filename
+                current_app.logger.info(f"Fazendo upload da imagem '{filename}' para o GCS")
+                try:
+                    # Usa a função de upload para o GCS
+                    public_url = upload_to_gcs(
+                        file_obj=file_data,
+                        filename=filename,
+                        content_type=file_data.content_type
+                    )
+                    # Atualiza o atributo do usuário com a URL da imagem
+                    current_user.profile_image = public_url
+                except Exception as e:
+                    current_app.logger.error(f"Erro ao fazer upload para o GCS: {e}")
+                    flash("Erro ao fazer upload da imagem. Tente novamente.", "danger")
+                    return redirect(url_for("main.edit_profile"))
             else:
                 current_app.logger.info("Nenhum arquivo selecionado ou o valor não é um objeto FileStorage.")
         else:
@@ -84,8 +92,9 @@ def edit_profile():
             current_app.logger.error(f"Erro ao atualizar perfil: {e}")
         
         return redirect(url_for('main.profile'))
-    
+
     return render_template('edit_profile.html', form=form)
+
 
 @main.route('/register', methods=['GET', 'POST'])
 @login_required

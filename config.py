@@ -13,6 +13,10 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(basedir, 'app', 'static', 'icons')
     
+     # Configuração do Google Cloud Storage (usada para armazenar os arquivos de imagem em produção)
+    GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME') or 'user_imag'
+
+    # Configuração de em-mail
     MAIL_SERVER = 'smtp.googlemail.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
