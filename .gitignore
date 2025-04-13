@@ -1,3 +1,6 @@
+# Ignorar banco de dados local (SQLite)
+instance/db.sqlite3
+
 # Ignorar ambiente virtual
 venv/
 
@@ -11,3 +14,6 @@ __pycache__/
 
 # Outros arquivos (ex.: logs, arquivos temporários)
 logs/
+
+# Ignorar arquivos de ambiente local (se preferir não versionar)
+.env
