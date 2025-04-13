@@ -8,8 +8,8 @@ def upload_to_gcs(file_obj, filename, content_type):
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(filename)
         blob.upload_from_file(file_obj, content_type=content_type)
-        # Com o uniform bucket-level access habilitado, não é permitido modificar ACLs legadas.
-        # A política de acesso público é gerenciada via IAM, então não chamamos blob.make_public().
+        # Com uniform bucket-level access ativado e o bucket configurado para acesso público via IAM,
+        # não é necessário (e nem permitido) usar blob.make_public().
         current_app.logger.info(f"Upload realizado com sucesso para o bucket {bucket_name}. URL: {blob.public_url}")
         return blob.public_url
     except Exception as e:
