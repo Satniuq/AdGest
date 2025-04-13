@@ -11,6 +11,3 @@ gunicorn
 pymysql
 google-cloud-storage
 
-
-
-
