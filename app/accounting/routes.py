@@ -8,7 +8,6 @@ from app.accounting.forms import InvoiceForm, UploadCSVForm
 from app.models import NotaHonorarios, Client, DocumentoContabilistico, Notification
 from app import db
 from flask_login import login_required, current_user
-from app.decorators import role_required
 from sqlalchemy import func
 
 @accounting.context_processor
@@ -22,7 +21,6 @@ def inject_notifications_accounting():
 
 @accounting.route('/manage', methods=['GET', 'POST'])
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def manage_invoices():
     form = InvoiceForm()
     query = DocumentoContabilistico.query.filter_by(user_id=current_user.id)
@@ -95,7 +93,6 @@ def manage_invoices():
 
 @accounting.route('/add_invoice', methods=['POST'])
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def add_invoice():
     form = InvoiceForm()
     if form.validate_on_submit():
@@ -164,7 +161,6 @@ def parse_date(date_str):
 
 @accounting.route('/upload_csv', methods=['GET', 'POST'])
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def upload_csv():
     form = UploadCSVForm()
     if form.validate_on_submit():
@@ -193,7 +189,6 @@ def upload_csv():
 
 @accounting.route('/preview_csv', methods=['GET', 'POST'])
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def preview_csv():
     registros = session.get('csv_registros', [])
     if not registros:
@@ -236,7 +231,6 @@ def preview_csv():
 
 @accounting.route('/confirm_csv_import', methods=['POST'])
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def confirm_csv_import():
     from app.models import DocumentoContabilistico, Client
     registros = session.get('csv_registros', [])
@@ -303,14 +297,19 @@ def confirm_csv_import():
         flash(f"Ocorreu um erro ao importar: {e}", "danger")
     return redirect(url_for('accounting.manage_invoices'))
 
-@accounting.route('/contabilidade_cliente/<int:client_id>')
+@accounting.route('/contabilidade_cliente/<int:client_id>') 
 @login_required
 def contabilidade_cliente(client_id):
     client = Client.query.get_or_404(client_id)
     contabil_docs = DocumentoContabilistico.query.filter(
         DocumentoContabilistico.client_id == client_id,
-        DocumentoContabilistico.user_id == current_user.id
+        or_(
+            DocumentoContabilistico.user_id == current_user.id,
+            DocumentoContabilistico.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
+        )
     ).order_by(DocumentoContabilistico.created_at.desc()).all()
+    
+    print("Total de documentos encontrados:", len(contabil_docs))
     paid_docs = [doc for doc in contabil_docs if doc.is_confirmed]
     pending_docs = [doc for doc in contabil_docs if not doc.is_confirmed]
     return render_template(
@@ -378,7 +377,6 @@ def edit_documento(doc_id):
 
 @accounting.route('/relatorio_contabilidade')
 @login_required
-@role_required(['contabilidade', 'backoffice', 'admin'])
 def relatorio_contabilidade():
     # Captura os mesmos filtros enviados por GET (como no manage_invoices)
     tipo = request.args.get('tipo', '')

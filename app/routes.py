@@ -134,7 +134,6 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and check_password_hash(user.password, form.password.data):
             login_user(user)
-            flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('main.index'))
         else:
             flash('Usuário ou senha incorretos.', 'danger')
@@ -190,7 +189,6 @@ Se você não solicitou essa alteração, ignore este e-mail.
 @login_required
 def logout():
     logout_user()
-    flash('Saiu do sistema.', 'info')
     return redirect(url_for('main.login'))
 #END ROTAS DE AUTENTICAÇÃO
 

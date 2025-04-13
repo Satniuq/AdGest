@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from app import create_app, db
 from app.models import User
 from werkzeug.security import generate_password_hash
@@ -9,9 +13,9 @@ with app.app_context():
     if admin is None:
         admin = User(
             username='admin',
-            nickname='ADM',  # ou outro nickname de sua escolha
+            nickname='ADM',
             email='admin@example.com',
-            password=generate_password_hash('admin1'),
+            password=generate_password_hash('admin_23'),
             role='admin'
         )
         db.session.add(admin)

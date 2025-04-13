@@ -88,13 +88,11 @@
               <a class="nav-link" href="{{ url_for('main.billing') }}">Billing</a>
             </li>
             {% endif %}
-            {% if current_user.is_authenticated and current_user.role in ['contabilidade', 'admin'] %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('accounting.manage_invoices') }}">
                   Contabilidade
                 </a>
               </li>
-            {% endif %}
             {% if current_user.is_authenticated %}
               <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('main.logout') }}">Logout</a>
