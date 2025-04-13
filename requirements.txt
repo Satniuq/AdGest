@@ -9,4 +9,6 @@ WTForms
 WTForms-SQLAlchemy
 gunicorn
 pymysql
+google-cloud-storage
+
 
