@@ -5,10 +5,10 @@ from datetime import datetime, date
 from flask import render_template, redirect, url_for, flash, request, session, make_response
 from app.accounting import accounting
 from app.accounting.forms import InvoiceForm, UploadCSVForm
-from app.models import NotaHonorarios, Client, DocumentoContabilistico, Notification
+from app.models import NotaHonorarios, Client, DocumentoContabilistico, Notification, ClientShare
 from app import db
 from flask_login import login_required, current_user
-from sqlalchemy import func
+from sqlalchemy import func, or_, and_
 
 @accounting.context_processor
 def inject_notifications_accounting():
@@ -23,8 +23,24 @@ def inject_notifications_accounting():
 @login_required
 def manage_invoices():
     form = InvoiceForm()
-    query = DocumentoContabilistico.query.filter_by(user_id=current_user.id)
     
+    accessible_numbers_subq = (
+        db.session.query(Client.number_interno)
+        .filter(
+            or_(
+                Client.user_id == current_user.id,
+                Client.shared_with.any(id=current_user.id),
+                Client.shares.any(ClientShare.user_id == current_user.id)
+            )
+        )
+        .subquery()
+    )
+
+    # Filtra os documentos cujo cliente tenha um número interno presente na subquery
+    query = DocumentoContabilistico.query.join(Client).filter(
+        Client.number_interno.in_(accessible_numbers_subq)
+    )
+
     # Parâmetros de filtro via GET:
     tipo = request.args.get('tipo', '')
     data_emissao = request.args.get('data_emissao', '')
@@ -48,6 +64,7 @@ def manage_invoices():
             pass
     if advogado:
         query = query.filter(DocumentoContabilistico.advogado.ilike(f"%{advogado}%"))
+    
     if cliente_nome:
         query = query.join(Client).filter(Client.name.ilike(f"%{cliente_nome}%"))
     if status:
@@ -301,24 +318,41 @@ def confirm_csv_import():
 @login_required
 def contabilidade_cliente(client_id):
     client = Client.query.get_or_404(client_id)
-    contabil_docs = DocumentoContabilistico.query.filter(
-        DocumentoContabilistico.client_id == client_id,
-        or_(
-            DocumentoContabilistico.user_id == current_user.id,
-            DocumentoContabilistico.client.has(Client.shares.any(ClientShare.user_id == current_user.id))
-        )
-    ).order_by(DocumentoContabilistico.created_at.desc()).all()
     
-    print("Total de documentos encontrados:", len(contabil_docs))
+    # Se o usuário logado for o dono, traz todos os documentos vinculados ao número interno
+    if client.user_id == current_user.id:
+        contabil_docs = (
+            DocumentoContabilistico.query
+            .join(Client)
+            .filter(Client.number_interno == client.number_interno)
+            .order_by(DocumentoContabilistico.created_at.desc())
+            .all()
+        )
+    else:
+        contabil_docs = (
+            DocumentoContabilistico.query
+            .join(Client)
+            .filter(
+                Client.number_interno == client.number_interno,
+                or_(
+                    DocumentoContabilistico.user_id == current_user.id,
+                    DocumentoContabilistico.client.has(Client.shares.any(ClientShare.user_id == current_user.id)),
+                    DocumentoContabilistico.client.has(Client.shared_with.any(id=current_user.id))
+                )
+            )
+            .order_by(DocumentoContabilistico.created_at.desc())
+            .all()
+        )
+    
     paid_docs = [doc for doc in contabil_docs if doc.is_confirmed]
     pending_docs = [doc for doc in contabil_docs if not doc.is_confirmed]
-    return render_template(
-        'accounting/contabilidade_cliente.html', 
-        client=client, 
-        paid_docs=paid_docs, 
-        pending_docs=pending_docs, 
-        today=date.today()
-    )
+    
+    return render_template('accounting/contabilidade_cliente.html',
+                           client=client,
+                           paid_docs=paid_docs,
+                           pending_docs=pending_docs,
+                           today=date.today())
+
 
 @accounting.route('/documento/alterar_status/<int:doc_id>', methods=['POST'])
 @login_required

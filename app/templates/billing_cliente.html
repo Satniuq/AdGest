@@ -1,38 +1,68 @@
 {% extends "base.html" %}
 {% block title %}Notas Emitidas - {{ client.name }}{% endblock %}
 {% block content %}
-<div class="container">
-  <h2 class="text-center my-4">Notas de Honorários Emitidas para {{ client.name }}</h2>
-  {% if billing_notes %}
-    <div id="clientBillingCarousel" class="carousel slide" data-bs-interval="false">
-      <div class="carousel-inner">
-        {% for note in billing_notes %}
-          <div class="carousel-item {% if loop.first %}active{% endif %}">
-            <div class="card">
-              <div class="card-header">
-                Nota #{{ note.id }}
-              </div>
-              <div class="card-body">
-                <p><strong>Data de Emissão:</strong> {{ note.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
-                <p><strong>Total de Horas:</strong> {{ note.total_hours }}h</p>
-                <pre style="white-space: pre-wrap;">{{ note.details }}</pre>
+<div class="container my-4">
+  <h2 class="text-center mb-4">Notas de Honorários Emitidas para {{ client.name }}</h2>
+  
+  {# Se desejar, poderá incluir um formulário de filtros similar ao billing_historico aqui #}
+  
+  {% if billing_notes and billing_notes|length > 0 %}
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th>Nota</th>
+            <th>Data de Emissão</th>
+            <th>Total de Horas</th>
+            <th>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for note in billing_notes %}
+            <tr>
+              <td><strong>Nota #{{ note.id }}</strong></td>
+              <td>{{ note.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td>{{ note.total_hours }}h</td>
+              <td>
+                {# Exibe um botão para abrir um modal com os detalhes da nota #}
+                <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#notaModal{{ note.id }}">
+                  Visualizar
+                </button>
+              </td>
+            </tr>
+            
+            <!-- Modal para Detalhes da Nota -->
+            <div class="modal fade" id="notaModal{{ note.id }}" tabindex="-1" aria-labelledby="notaModalLabel{{ note.id }}" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="notaModalLabel{{ note.id }}">
+                      Nota #{{ note.id }} - {{ client.name }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                  </div>
+                  <div class="modal-body">
+                    <p><strong>Data de Emissão:</strong> {{ note.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p><strong>Total de Horas:</strong> {{ note.total_hours }}h</p>
+                    <pre class="bg-light p-2">{{ note.details }}</pre>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        {% endfor %}
-      </div>
-      <button class="carousel-control-prev" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="prev">
-        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Anterior</span>
-      </button>
-      <button class="carousel-control-next" type="button" data-bs-target="#clientBillingCarousel" data-bs-slide="next">
-        <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        <span class="visually-hidden">Próximo</span>
-      </button>
+            
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   {% else %}
-    <p>Nenhuma nota emitida para este cliente.</p>
+    <p class="text-center">Nenhuma nota emitida para este cliente.</p>
   {% endif %}
-  <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary mt-3">Voltar à lista de clientes</a>
+  
+  <div class="text-center mt-3">
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar à lista de clientes</a>
+  </div>
 </div>
 {% endblock %}

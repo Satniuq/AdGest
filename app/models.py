@@ -245,12 +245,17 @@ class Client(db.Model):
     
     assuntos = db.relationship('Assunto', backref='client', lazy=True)
     
+    # Relação de partilha via tabela many-to-many
+    shared_with = db.relationship('User', secondary=shared_clients, 
+                                  backref=db.backref('shared_clients', lazy='dynamic'),
+                                  lazy='dynamic')
+
+    # Relacionamento para partilha de clientes
+    shares = db.relationship('ClientShare', backref='client', lazy='dynamic')
+
     __table_args__ = (
         db.UniqueConstraint('user_id', 'name', name='uq_user_clientname'),
     )
-    
-    # Relacionamento para partilha de clientes
-    shares = db.relationship('ClientShare', backref='client', lazy='dynamic')
     
     def __repr__(self):
         return f'<Client {self.name}>'

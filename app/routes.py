@@ -24,7 +24,7 @@ from app.forms import (RegistrationForm, LoginForm, AssuntoForm, TarefaForm,
                        EditProfileForm, RequestResetForm, ResetPasswordForm)
 from app.models import (User, Assunto, Tarefa, PrazoJudicial, db, Client,
                         NotaHonorarios, ClientShare, shared_assuntos,
-                        shared_prazos, HoraAdicao, DocumentoContabilistico,
+                        shared_prazos, HoraAdicao, HourEntry, DocumentoContabilistico,
                         Notification, AssuntoHistory, TarefaHistory, PrazoHistory,
                         Comment)
 from app.decorators import admin_required
@@ -126,18 +126,18 @@ def register():
                     flash(f"Erro no campo {field}: {error}", 'danger')
     return render_template('register.html', form=form)
 
-
 @main.route('/login', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
         if user and check_password_hash(user.password, form.password.data):
-            login_user(user)
+            login_user(user, remember=False)
             return redirect(url_for('main.index'))
         else:
             flash('Usuário ou senha incorretos.', 'danger')
     return render_template('login.html', form=form)
+
 
 @main.route('/reset_password', methods=['GET', 'POST'])
 def reset_request():
@@ -206,7 +206,7 @@ def index():
 @main.route('/dashboard')
 @login_required
 def dashboard():
-    # Carrega TODOS os assuntos do usuário ou compartilhados
+    # 1) Carrega e filtra os assuntos
     all_assuntos = Assunto.query.filter(
         or_(
             Assunto.user_id == current_user.id,
@@ -214,48 +214,63 @@ def dashboard():
         )
     ).order_by(Assunto.sort_order, Assunto.nome_assunto).all()
 
-    # Filtra para exibir:
-    # - Assuntos que não estão concluídos (is_completed == False)
-    # ou
-    # - Assuntos concluídos mas que possuem pelo menos uma tarefa que não está concluída
     assuntos = []
     for assunto in all_assuntos:
-        if not assunto.is_completed:
+        if not assunto.is_completed or any(not t.is_completed for t in assunto.tarefas):
             assuntos.append(assunto)
-        else:
-            # Se estiver concluído, verifica se existe pelo menos uma tarefa aberta
-            if any(not tarefa.is_completed for tarefa in assunto.tarefas):
-                assuntos.append(assunto)
 
-    # Cria o dicionário para as tarefas visíveis para cada assunto
+    # 2) Quais tarefas cada user pode ver
     assuntos_tarefas_visiveis = {}
     for assunto in assuntos:
         if assunto.shared_with.count() > 0:
-            tarefas_visiveis = assunto.tarefas
+            visiveis = assunto.tarefas.all()
         else:
-            tarefas_visiveis = [tarefa for tarefa in assunto.tarefas if tarefa.user_id == current_user.id]
-        assuntos_tarefas_visiveis[assunto.id] = tarefas_visiveis
+            visiveis = [t for t in assunto.tarefas.all() if t.user_id == current_user.id]
+        assuntos_tarefas_visiveis[assunto.id] = visiveis
 
-    # Busca prazos pendentes (de acordo com sua lógica já existente)
+    # 3) Total de horas por tarefa (horas cadastradas + entradas em HourEntry)
+    task_total_hours = {}
+    for tarefas in assuntos_tarefas_visiveis.values():
+        for tarefa in tarefas:
+            adicional = db.session.query(
+                func.coalesce(func.sum(HourEntry.hours), 0)
+            ).filter(
+                HourEntry.object_type=='tarefa',
+                HourEntry.object_id==tarefa.id
+            ).scalar()
+            task_total_hours[tarefa.id] = (tarefa.horas or 0) + adicional
+
+    # 4) Soma total de horas por assunto
+    assunto_total_hours = {}
+    for assunto in assuntos:
+        soma = 0
+        for tarefa in assuntos_tarefas_visiveis[assunto.id]:
+            soma += task_total_hours.get(tarefa.id, 0)
+        assunto_total_hours[assunto.id] = soma
+
+    # 5) Busca os prazos
     prazos = PrazoJudicial.query.filter(
         or_(
             PrazoJudicial.user_id == current_user.id,
             PrazoJudicial.shared_with.any(id=current_user.id)
         ),
-        PrazoJudicial.status == False
+        PrazoJudicial.status==False
     ).order_by(PrazoJudicial.prazo).all()
 
-    current_date = date.today()
-    tomorrow_date = current_date + timedelta(days=1)
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
 
     return render_template(
         'dashboard.html',
         assuntos=assuntos,
-        assuntos_tarefas_visiveis=assuntos_tarefas_visiveis,
         prazos=prazos,
-        current_date=current_date,
-        tomorrow_date=tomorrow_date
+        assuntos_tarefas_visiveis=assuntos_tarefas_visiveis,
+        task_total_hours=task_total_hours,               # só para debug, se quiser
+        assunto_total_hours=assunto_total_hours,
+        current_date=today,
+        tomorrow_date=tomorrow
     )
+
 
 ### ROTAS PARA ASSUNTOS, TAREFAS E PRAZOS (já existentes) ###
 @main.route('/assunto/create', methods=['GET', 'POST'])
@@ -642,6 +657,10 @@ def add_hours_tarefa(tarefa_id):
         )
         db.session.add(hist)
         db.session.commit()
+
+        # Log para confirmar o valor atualizado
+        print(f"Valor atualizado de tarefa.horas para a tarefa {tarefa_id}: {tarefa.horas}")
+
 
         flash("Horas adicionadas com sucesso!", "success")
         # Cria um conjunto para unificar os usuários a serem notificados
@@ -1238,6 +1257,7 @@ def add_comment():
 
 #END ROTAS PARA HISTÓRICO DE ASSUNTOS, TAREFAS, PRAZOS
 
+
 #BEGIN ROTAS CLIENTES
 ### ROTAS PARA CLIENTES E HISTÓRICO ###
 @main.route('/clientes')
@@ -1245,12 +1265,8 @@ def add_comment():
 def clientes():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '').strip()
-    query = Client.query.filter(
-    or_(
-        Client.user_id == current_user.id,
-        Client.shares.any(ClientShare.user_id == current_user.id)
-        )
-    )
+    query = Client.query.filter(Client.user_id == current_user.id)
+    
     if search:
         query = query.filter(
             or_(
@@ -1437,17 +1453,12 @@ def edit_client(client_id):
 @login_required
 def share_client(client_id):
     client = Client.query.get_or_404(client_id)
-    form = ShareForm()  # Já existe o seu ShareForm com o campo shared_with
-
-    # Preencha as choices do campo shared_with, se necessário:
-    # form.shared_with.query = User.query.filter(...)
+    form = ShareForm()
 
     if form.validate_on_submit():
-        client.shared_with = form.shared_with.data
-        db.session.commit()
-        flash("Compartilhamento atualizado com sucesso!", "success")
-        
-        #partilhar clientes
+        # Não faz: client.shared_with = form.shared_with.data
+        # Em vez disso, registra as partilhas (por exemplo, via ClientShare ou outro mecanismo) 
+        # E envia a notificação de compartilhamento:
         for user in form.shared_with.data:
             if user.id != current_user.id:
                 mensagem = f"{current_user.nickname} partilhou consigo o cliente {client.name}"
@@ -1457,9 +1468,9 @@ def share_client(client_id):
                     "share_invite",
                     mensagem,
                     link,
-                    extra_data={"cliente_id": int(client.id)}
+                    extra_data={"cliente_id": client.id}
                 )
-
+        flash("Compartilhamento solicitado com sucesso! Verifique suas notificações para aceitar.", "success")
         return redirect(url_for('main.clientes'))
 
     return render_template('partilhar_cliente.html', client=client, form=form)
@@ -1517,30 +1528,41 @@ def resolver_conflitos_cliente(cliente_existente_id):
     flash("Informações do cliente atualizadas com sucesso!", "success")
     return redirect(url_for('main.client_info', client_id=cliente_existente.id))
 
-@main.route('/criar_cliente_partilhado/<int:cliente_partilhado_id>')
+@main.route('/criar_cliente_partilhado/<int:cliente_partilhado_id>', methods=['GET', 'POST'])
 @login_required
 def criar_cliente_partilhado(cliente_partilhado_id):
     cliente_partilhado = Client.query.get_or_404(cliente_partilhado_id)
-    # Verifica se já existe um cliente com o mesmo nome para o usuário atual
-    existente = Client.query.filter_by(user_id=current_user.id, name=cliente_partilhado.name).first()
+    
+    # Verifica por número interno (ou nome se necessário) – utilizando a normalização
+    if cliente_partilhado.number_interno:
+        existente = Client.query.filter(
+            Client.user_id == current_user.id,
+            func.lower(func.trim(Client.number_interno)) == cliente_partilhado.number_interno.strip().lower()
+        ).first()
+    else:
+        existente = Client.query.filter(
+            Client.user_id == current_user.id,
+            func.lower(func.trim(Client.name)) == cliente_partilhado.name.strip().lower()
+        ).first()
+
     if existente:
-        flash("Você já possui um cliente com esse nome. Por favor, verifique.", "warning")
+        flash("Você já possui um cliente com estes dados.", "warning")
         return redirect(url_for('main.client_info', client_id=existente.id))
     
-    # Caso contrário, cria a cópia
     novo_cliente = Client(
         user_id=current_user.id,
-        name=cliente_partilhado.name,
-        number_interno=cliente_partilhado.number_interno,
-        nif=cliente_partilhado.nif,
-        address=cliente_partilhado.address,
-        email=cliente_partilhado.email,
-        telephone=cliente_partilhado.telephone
+        name=cliente_partilhado.name.strip(),
+        number_interno=cliente_partilhado.number_interno.strip() if cliente_partilhado.number_interno else None,
+        nif=cliente_partilhado.nif.strip() if cliente_partilhado.nif else None,
+        address=cliente_partilhado.address.strip() if cliente_partilhado.address else None,
+        email=cliente_partilhado.email.strip() if cliente_partilhado.email else None,
+        telephone=cliente_partilhado.telephone.strip() if cliente_partilhado.telephone else None
     )
     db.session.add(novo_cliente)
     db.session.commit()
-    flash("Novo cliente criado com os dados partilhados!", "success")
+    flash("Cliente partilhado aceito e criado com sucesso!", "success")
     return redirect(url_for('main.client_info', client_id=novo_cliente.id))
+
 
 from sqlalchemy import or_
 from app.models import Assunto, PrazoJudicial, Comment, TarefaHistory, PrazoHistory, User
@@ -2143,18 +2165,4 @@ def respond_share(notif_id, acao):
     return redirect(url_for('main.notifications'))
 #END ROTAS NOTIFICAÇÕES
 
-#BEGIN ROTA PRINCIPAL PARA CONTABILIDADE
-#ROTA PRINCIPAL PARA CONTABILIDADE
-@main.route('/contabilidade_cliente/<int:client_id>')
-@login_required
-def contabilidade_cliente(client_id):
-    client = Client.query.get_or_404(client_id)
-    contabil_docs = DocumentoContabilistico.query.filter(
-        DocumentoContabilistico.client_id == client_id,
-        DocumentoContabilistico.user_id == current_user.id
-    ).order_by(DocumentoContabilistico.created_at.desc()).all()
-    paid_docs = [doc for doc in contabil_docs if doc.is_confirmed]
-    pending_docs = [doc for doc in contabil_docs if not doc.is_confirmed]
-    return render_template('accounting/contabilidade_cliente.html', client=client, paid_docs=paid_docs, pending_docs=pending_docs)
-#END ROTA PRINCIPAL PARA CONTABILIDADE
 

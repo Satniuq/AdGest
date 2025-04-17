@@ -35,7 +35,7 @@
               <a href="{{ url_for('main.client_info', client_id=client.id) }}" class="btn btn-primary btn-sm">Info</a>
               <a href="{{ url_for('main.historico_cliente', client_id=client.id) }}" class="btn btn-info btn-sm">Histórico</a>
               <a href="{{ url_for('main.billing_cliente', client_id=client.id) }}" class="btn btn-success btn-sm">Billing</a>
-              <a href="{{ url_for('main.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+              <a href="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
             </div>
             <div>
               <!-- Novo Botão de Partilhar -->

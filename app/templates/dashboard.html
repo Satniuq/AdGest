@@ -255,22 +255,13 @@
               </div>
             </div>
             <div class="card-body">
-              {% set total_horas = 0 %}
-              {% for tarefa in assunto.tarefas %}
-                {% if tarefa.horas %}
-                  {% set total_horas = total_horas + tarefa.horas %}
-                {% endif %}
-              {% endfor %}
-              <p class="mb-2" style="white-space: normal;">
+              <p class="mb-2">
                 <strong>Cliente:</strong> {{ assunto.client.name }} |
                 <strong>Data:</strong>
-                {% if assunto.due_date %}
-                  {{ assunto.due_date.strftime('%d/%m/%Y') }}
-                {% else %}
-                  Sem data
-                {% endif %}
-                | <i class="fa-solid fa-clock"></i> {{ total_horas|default(0) }}h
+                  {{ assunto.due_date.strftime('%d/%m/%Y') if assunto.due_date else 'Sem data' }} |
+                <i class="fa‐solid fa‐clock"></i> {{ assunto_total_hours[assunto.id] }}h
               </p>
+              
               <!-- Botão para mostrar Tarefas -->
               <button class="btn btn-primary btn-dashboard mb-2" type="button"
                       data-bs-toggle="collapse"

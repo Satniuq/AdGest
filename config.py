@@ -28,7 +28,6 @@ class Config:
     UPLOAD_FOLDER = os.path.join(basedir, 'app', 'static', 'icons')
     
     # Configuração do Google Cloud Storage – para produção, essa variável deve conter o nome do bucket.
-    # Em desenvolvimento, você pode manter o mesmo ou configurar outro bucket de teste.
     GCS_BUCKET_NAME = os.environ.get('GCS_BUCKET_NAME') or 'user_imag'
     
     # Configuração de e-mail
@@ -36,5 +35,8 @@ class Config:
     MAIL_PORT = 587
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME') or 'jose.quintas1994@gmail.com'
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'enmeuscbdsxdjcpx'
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD') or 'cdtn hbfd mxgr hjjs'
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER') or 'jose.quintas1994@gmail.com'
+
+    # Sessões não permanentes: o cookie expira ao fechar o navegador
+    SESSION_PERMANENT = False

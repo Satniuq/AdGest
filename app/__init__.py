@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
@@ -19,7 +19,12 @@ login_manager = LoginManager()
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config['SESSION_PERMANENT'] = False
     app.jinja_env.globals['timedelta'] = timedelta
+
+    @app.before_request
+    def make_session_non_permanent():
+        session.permanent = False
 
     # Inicialização de extensões
     db.init_app(app)
@@ -36,6 +41,8 @@ def create_app():
     
     # Disponibiliza getattr no ambiente Jinja
     app.jinja_env.globals['getattr'] = getattr
+    # Disponibiliza hasattr para uso nos templates
+    app.jinja_env.globals['hasattr'] = hasattr
 
     # Registro do filtro 'get_attr'
     def get_attr(obj, attr_name):

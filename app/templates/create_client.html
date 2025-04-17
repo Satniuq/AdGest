@@ -13,7 +13,7 @@
     {{ macros.render_field(form.email) }}
     {{ macros.render_field(form.telephone) }}
     <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-    <a href="{{ url_for('main.clientes') }}" class="btn btn-secondary">Voltar</a>
+    <a href="{{ url_for('main.clientes') }}" class="btn btn-outline-secondary">Voltar</a>
   </form>
 </div>
 {% endblock %}
