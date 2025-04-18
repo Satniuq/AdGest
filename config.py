@@ -16,7 +16,8 @@ class Config:
     # Se estiver em produção (FLASK_ENV == 'production'), use o Cloud SQL; caso contrário, use um banco de dados local (SQLite, por exemplo).
     if FLASK_ENV == 'production':
         SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-            'mysql+pymysql://db-adgest1:Sporting789@/adgest_db?unix_socket=/cloudsql/adgest:us-central1:db-adgest1'
+            'mysql+pymysql://db_adgest2:Sporting789%3F@/adgest_db' \
+            '?unix_socket=/cloudsql/adgest:europe-west1:db-adgest2'
     else:
         # No ambiente de desenvolvimento, usamos um SQLite local por simplicidade.
         SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \

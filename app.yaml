@@ -3,7 +3,7 @@ runtime: python310
 env_variables:
   FLASK_ENV: production
   SECRET_KEY: "sua_chave_secreta_aqui"
-  DATABASE_URL: "mysql+pymysql://db-adgest1:Sporting789@/adgest_db?unix_socket=/cloudsql/adgest:us-central1:db-adgest1"
-  DEPLOY_TIMESTAMP: "2025-04-13T18:50:00"  # Atualize esse valor a cada novo deploy
+  DATABASE_URL: "mysql+pymysql://db_adgest2:Sporting789%3F@/adgest_db?unix_socket=/cloudsql/adgest:europe-west1:db-adgest2"
+  DEPLOY_TIMESTAMP: "2025-04-18T12:00:00"  # atualize à medida que faz novos deploys
 
 entrypoint: gunicorn -b :$PORT run:app
