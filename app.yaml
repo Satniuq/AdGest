@@ -1,9 +1,10 @@
 runtime: python310
 
+beta_settings:
+  cloud_sql_instances: adgest:europe-west1:db-adgest2
+
 env_variables:
   FLASK_ENV: production
-  SECRET_KEY: "sua_chave_secreta_aqui"
+  SECRET_KEY: "…"
   DATABASE_URL: "mysql+pymysql://db_adgest2:Sporting789%3F@/adgest_db?unix_socket=/cloudsql/adgest:europe-west1:db-adgest2"
-  DEPLOY_TIMESTAMP: "2025-04-18T12:00:00"  # atualize à medida que faz novos deploys
-
 entrypoint: gunicorn -b :$PORT run:app
