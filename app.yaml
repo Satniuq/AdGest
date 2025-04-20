@@ -1,6 +1,6 @@
 runtime: python312
 
-# Conector Serverless VPC Access (mesma região da app: europe-west6)
+# liga todo o tráfego de saída via o conector criado
 vpc_access_connector:
   name: projects/adgest/locations/europe-west6/connectors/app-connector
 
