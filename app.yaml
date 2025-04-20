@@ -10,3 +10,7 @@ env_variables:
   DEPLOY_TIMESTAMP: "2025-04-18T12:00:00"
 
 entrypoint: gunicorn -b :$PORT run:app
+
+vpc_access_connector:
+  name: projects/adgest/locations/europe-west1/connectors/app-connector
+
