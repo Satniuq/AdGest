@@ -1,21 +1,19 @@
 runtime: python312
 
-# conecta seu código à VPC para poder falar com o IP privado do Cloud SQL
+# conecta o seu serviço à VPC para poder alcançar o IP privado do Cloud SQL
 vpc_access_connector:
   name: projects/adgest/locations/europe-west6/connectors/app-connector
-  egress_settings: ALL_TRAFFIC
+  egress_setting: all-traffic
 
-# variáveis de ambiente em produção
+# variáveis de ambiente
 env_variables:
   FLASK_ENV: production
   SECRET_KEY: "sua_chave_secreta_aqui"
-
   DB_HOST: 10.62.16.4
   DB_PORT: 3306
   DB_USER: db_adgest2
-  DB_PASS: "Sporting789?"
+  DB_PASS: Sporting789?
   DB_NAME: adgest_db
-
   DEPLOY_TIMESTAMP: "2025-04-18T12:00:00"
 
 entrypoint: gunicorn -b :$PORT run:app
