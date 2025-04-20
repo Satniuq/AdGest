@@ -1,16 +1,22 @@
 runtime: python312
 
+# já tinhas isto
 beta_settings:
   cloud_sql_instances: adgest:europe-west1:db-adgest2
 
 env_variables:
   FLASK_ENV: production
   SECRET_KEY: "sua_chave_secreta_aqui"
-  DATABASE_URL: "mysql+pymysql://db_adgest2:Sporting789%3F@localhost/adgest_db?unix_socket=/cloudsql/adgest:europe-west1:db-adgest2"
+  DB_HOST: 10.62.16.4
+  DB_PORT: 3306
+  DB_USER: db_adgest2
+  DB_PASS: Sporting789?
+  DB_NAME: adgest_db
   DEPLOY_TIMESTAMP: "2025-04-18T12:00:00"
 
-entrypoint: gunicorn -b :$PORT run:app
-
+# este bloco liga teu serviço à VPC para poder alcançar o IP privado
 vpc_access_connector:
-  name: projects/adgest/locations/europe-west1/connectors/app-connector
+  name: projects/adgest/locations/europe-west6/connectors/app-connector
+  egress_settings: ALL_TRAFFIC
 
+entrypoint: gunicorn -b :$PORT run:app
