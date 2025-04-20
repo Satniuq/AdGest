@@ -17,8 +17,7 @@ class Config:
         DB_PORT = os.environ.get('DB_PORT', 3306)
         DB_NAME = os.environ['DB_NAME']
         SQLALCHEMY_DATABASE_URI = (
-            f"mysql+pymysql://{DB_USER}:{DB_PASS}"
-            f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+            f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
         )
     else:
         # Desenvolvimento local
