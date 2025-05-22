@@ -1,0 +1,74 @@
+{# app/dashboard_prazos/templates/_processos_list.html #}
+
+<div class="d-flex justify-content-end mb-2">
+  <a href="{{ url_for('processos.create_process') }}" class="btn btn-success">
+    <i class="fa-solid fa-plus"></i> Novo Processo
+  </a>
+</div>
+
+<table class="table table-hover table-striped align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>ID / Código</th>
+      <th>Tipo de Caso</th>
+      <th>Fase</th>
+      <th>Cliente</th>
+      <th>Status</th>
+      <th class="text-end">Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for proc in processos %}
+      <tr>
+        <td>
+          <a href="{{ url_for('processos.detail_process', processo_id=proc.id) }}">
+            {{ proc.external_id or proc.id }}
+          </a>
+        </td>
+        <td>{{ proc.case_type.name if proc.case_type else '-' }}</td>
+        <td>{{ proc.phase.name if proc.phase else '-' }}</td>
+        <td>{{ proc.client.name }}</td>
+        <td class="text-center">
+          <form method="post"
+                action="{{ url_for('processos.toggle_process_status', processo_id=proc.id) }}"
+                class="d-inline">
+            {{ csrf_form.csrf_token }}
+            <button type="submit"
+                    class="btn btn-sm
+                       {% if proc.status=='open' %}btn-warning text-dark
+                       {% else %}btn-success{% endif %}"
+                    title="Clique para alternar status">
+              {{ proc.status|capitalize }}
+            </button>
+          </form>
+        </td>        
+        <td class="text-end">
+          <a href="{{ url_for('processos.detail_process', processo_id=proc.id) }}"
+             class="btn btn-sm btn-outline-info" title="Ver">
+            <i class="fa-solid fa-eye"></i>
+          </a>
+          <a href="{{ url_for('processos.edit_process', processo_id=proc.id) }}"
+             class="btn btn-sm btn-outline-primary" title="Editar">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </a>
+          <form action="{{ url_for('processos.delete_process', processo_id=proc.id) }}"
+                method="post" class="d-inline"
+                onsubmit="return confirm('Excluir este processo?');">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit"
+                    class="btn btn-sm btn-outline-danger"
+                    title="Excluir">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="8" class="text-center text-muted">
+          Nenhum processo encontrado.
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Importar CSV{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Importar Documentos via CSV</h2>
+  <form method="POST"
+      action="{{ url_for('accounting.upload_csv') }}"
+      enctype="multipart/form-data">
+  {{ upload_form.hidden_tag() }}
+  {{ upload_form.csv_file(class="form-control") }}
+  <button type="submit" class="btn btn-primary">Importar</button>
+</form>
+</div>
+{% endblock %}

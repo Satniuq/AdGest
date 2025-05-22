@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Informação do Cliente - {{ client.name }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2 class="text-center my-4">Informação do Cliente</h2>
+  <div class="card">
+    <div class="card-body">
+      <h4>{{ client.name }}</h4>
+      {% if client.number_interno %}
+        <p><strong>Número Interno:</strong> {{ client.number_interno }}</p>
+      {% endif %}
+      {% if client.nif %}
+        <p><strong>NIF:</strong> {{ client.nif }}</p>
+      {% endif %}
+      {% if client.address %}
+        <p><strong>Morada:</strong> {{ client.address }}</p>
+      {% endif %}
+      {% if client.email %}
+        <p><strong>Email:</strong> {{ client.email }}</p>
+      {% endif %}
+      {% if client.telephone %}
+        <p><strong>Telefone:</strong> {{ client.telephone }}</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="mt-3">
+    <a href="{{ url_for('client.edit_client', client_id=client.id) }}" class="btn btn-warning">Editar</a>
+    <a href="{{ url_for('client.clientes') }}" class="btn btn-secondary">Voltar</a>
+  </div>
+</div>
+{% endblock %}

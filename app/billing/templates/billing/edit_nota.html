@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Editar Nota #{{ nota.id }}{% endblock %}
+
+{% block content %}
+<h4>Editar Nota #{{ nota.id }}</h4>
+<form method="post">
+  {{ form.hidden_tag() }}
+
+  <div class="mb-3">
+    {{ form.cliente.label(class="form-label") }}
+    {{ form.cliente(class="form-select") }}
+  </div>
+
+  <div class="mb-3">
+    {{ form.total_hours.label(class="form-label") }}
+    {{ form.total_hours(class="form-control") }}
+  </div>
+
+  <div class="mb-3">
+    {{ form.status.label(class="form-label") }}
+    {{ form.status(class="form-select") }}
+  </div>
+
+  {{ form.submit(class="btn btn-primary") }}
+  <a href="{{ url_for('billing.view_nota', nota_id=nota.id) }}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

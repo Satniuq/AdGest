@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Notas de Honorários{% endblock %}
+
+{% block content %}
+<h4>Pesquisar Notas de Honorários</h4>
+<form method="get">
+  <div class="row g-2 mb-4">
+    <div class="col-auto">{{ form.source_type.label }} {{ form.source_type(class_='form-select') }}</div>
+    <div class="col-auto">{{ form.date_from.label }} {{ form.date_from(class_='form-control') }}</div>
+    <div class="col-auto">{{ form.date_to.label }} {{ form.date_to(class_='form-control') }}</div>
+    <div class="col-auto">{{ form.submit(class_='btn btn-primary') }}</div>
+  </div>
+</form>
+
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Data</th>
+      <th>Módulo</th>
+      <th>Total (h)</th>
+      <th>Cliente</th>
+      <th>Criado por</th>
+      <th>Faturas Ligadas</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in notas %}
+    <tr>
+      <td>{{ n.id }}</td>
+      <td>{{ n.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>{{ n.source_type.capitalize() }}</td>
+      <td>{{ '%.1f'|format(n.total_hours) }}</td>
+      <td>
+        {{ n.cliente.name }}{% if n.cliente.nif %} (NIF: {{ n.cliente.nif }}){% endif %}
+      </td>
+      <td>{{ n.creator.nickname }}</td>
+      <td>
+        {% set faturadas = n.documentos_contabilisticos
+            |selectattr('tipo.value', 'equalto', 'fatura')
+            |list %}
+        {% if faturadas %}
+          {% for doc in faturadas %}
+            <a href="{{ url_for('billing.view_documento',
+                                nota_id=n.id,
+                                doc_id=doc.id) }}">
+              {{ doc.numero or ('#'+doc.id|string) }}
+            </a>{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        {% else %}
+          —
+        {% endif %}
+      </td>
+
+      <td>
+        <a href="{{ url_for('billing.view_nota', nota_id=n.id) }}"
+           class="btn btn-sm btn-link">Ver</a>
+      </td>
+    </tr>
+    {% endfor %}
+    {% if notas|length == 0 %}
+    <tr>
+      <td colspan="8" class="text-center text-muted">Nenhuma nota encontrada.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

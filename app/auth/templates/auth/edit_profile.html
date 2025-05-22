@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Editar Perfil{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2>Editar Perfil</h2>
+  <form method="POST" action="{{ url_for('auth.edit_profile') }}" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.nickname.label(class="form-label") }}
+      {{ form.nickname(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.email.label(class="form-label") }}
+      {{ form.email(class="form-control") }}
+    </div>
+    <div class="mb-3">
+      {{ form.profile_image.label(class="form-label") }}
+      {{ form.profile_image(class="form-control") }}
+      <small class="form-text text-muted">Selecione uma imagem do seu computador.</small>
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}Nota #{{ nota.id }}{% endblock %}
+
+{% block content %}
+<h4>Nota de Honorários #{{ nota.id }}</h4>
+
+<dl class="row mb-4">
+  <dt class="col-sm-3">Criada em:</dt>
+  <dd class="col-sm-9">{{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}</dd>
+
+  <dt class="col-sm-3">Criador:</dt>
+  <dd class="col-sm-9">{{ nota.creator.nickname }} ({{ nota.creator.email }})</dd>
+
+  <dt class="col-sm-3">Total de Horas:</dt>
+  <dd class="col-sm-9">{{ '%.1f'|format(nota.total_hours) }}h</dd>
+
+  <dt class="col-sm-3">Status:</dt>
+  <dd class="col-sm-9">{{ nota.status }}</dd>
+</dl>
+
+<hr>
+
+<h5>Cliente</h5>
+<dl class="row mb-4">
+  <dt class="col-sm-3">Nome:</dt>
+  <dd class="col-sm-9">{{ nota.cliente.name }}</dd>
+
+  {% if nota.cliente.nif %}
+  <dt class="col-sm-3">NIF:</dt>
+  <dd class="col-sm-9">{{ nota.cliente.nif }}</dd>
+  {% endif %}
+
+  {% if nota.cliente.email %}
+  <dt class="col-sm-3">Email:</dt>
+  <dd class="col-sm-9">{{ nota.cliente.email }}</dd>
+  {% endif %}
+</dl>
+
+<hr>
+
+<h5>Itens da Nota</h5>
+<table class="table table-sm mb-4">
+  <thead>
+    <tr>
+      <th>Data/Hora</th>
+      <th>Usuário</th>
+      <th>Horas</th>
+      <th>Descrição</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for it in nota.items %}
+    <tr>
+      <td>{{ it.date.strftime('%d/%m %H:%M') }}</td>
+      <td>{{ it.user.nickname }}</td>
+      <td>{{ '%.1f'|format(it.hours) }}</td>
+      <td>{{ it.description }}</td>
+    </tr>
+    {% endfor %}
+    {% if nota.items|length == 0 %}
+    <tr>
+      <td colspan="4" class="text-center text-muted">Sem itens registados.</td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<hr>
+
+<h5>Documentos Contabilísticos Associados</h5>
+{% set docs = nota.documentos_contabilisticos %}
+{% if docs %}
+<table class="table table-sm">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Tipo</th>
+      <th>Número</th>
+      <th>Data Emissão</th>
+      <th>Valor</th>
+      <th>Status Cobrança</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for doc in docs %}
+    <tr>
+      <td>{{ doc.id }}</td>
+      <td>{{ doc.tipo.value|capitalize }}</td>
+      <td>{{ doc.numero or '—' }}</td>
+      <td>
+        {% if doc.data_emissao %}
+          {{ doc.data_emissao.strftime('%d/%m/%Y') }}
+        {% else %}
+          — 
+        {% endif %}
+      </td>
+      <td>{{ '%.2f'|format(doc.valor) }} €</td>
+      <td>{{ doc.status_cobranca }}</td>
+      <td>
+        <a href="{{ url_for('billing.view_documento', nota_id=nota.id, doc_id=doc.id) }}" class="btn btn-sm btn-link">
+          Ver
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="text-muted">Nenhum documento contabilístico associado.</p>
+{% endif %}
+
+<hr>
+
+<a href="{{ url_for('billing.list_notas') }}" class="btn btn-secondary">Voltar à Lista</a>
+<a href="{{ url_for('billing.edit_nota', nota_id=nota.id) }}" class="btn btn-warning">Editar</a>
+{% endblock %}

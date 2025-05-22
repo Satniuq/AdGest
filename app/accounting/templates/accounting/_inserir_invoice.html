@@ -1,0 +1,116 @@
+<!-- inserir_invoice.html -->
+<div class="collapse mb-3" id="collapseInserir">
+  <div class="card card-body">
+    <form method="POST" action="{{ url_for('accounting.add_invoice') }}">
+      {{ invoice_form.hidden_tag() }}
+
+      <!-- Cliente existente -->
+      <div class="mb-3">
+        {{ invoice_form.client_existing.label(class="form-label") }}
+        {{ invoice_form.client_existing(class="form-select") }}
+        {% if invoice_form.client_existing.errors %}
+          <div class="invalid-feedback d-block">
+            {{ invoice_form.client_existing.errors[0] }}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Notas a faturar -->
+      <div class="row mb-3">
+        <div class="col-12">
+          {{ invoice_form.notas.label(class="form-label") }}
+          {{ invoice_form.notas(class="form-select", multiple=true, size=5) }}
+          {% if invoice_form.notas.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.notas.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Dados principais -->
+      <div class="row mb-3">
+        <div class="col-md-3">
+          {{ invoice_form.numero.label(class="form-label") }}
+          {{ invoice_form.numero(class="form-control") }}
+          {% if invoice_form.numero.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.numero.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-3">
+          {{ invoice_form.tipo.label(class="form-label") }}
+          {{ invoice_form.tipo(class="form-select") }}
+          {% if invoice_form.tipo.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.tipo.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-3">
+          {{ invoice_form.data_emissao.label(class="form-label") }}
+          {{ invoice_form.data_emissao(class="form-control", type="date") }}
+          {% if invoice_form.data_emissao.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.data_emissao.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-3">
+          {{ invoice_form.valor.label(class="form-label") }}
+          {{ invoice_form.valor(class="form-control") }}
+          {% if invoice_form.valor.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.valor.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Dados adicionais -->
+      <div class="row mb-3">
+        <div class="col-md-4">
+          {{ invoice_form.advogado.label(class="form-label") }}
+          {{ invoice_form.advogado(class="form-control", placeholder="Nome do Advogado") }}
+          {% if invoice_form.advogado.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.advogado.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          {{ invoice_form.status.label(class="form-label") }}
+          {{ invoice_form.status(class="form-select") }}
+          {% if invoice_form.status.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.status.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+        <div class="col-md-4">
+          {{ invoice_form.data_vencimento.label(class="form-label") }}
+          {{ invoice_form.data_vencimento(class="form-control", type="date") }}
+          {% if invoice_form.data_vencimento.errors %}
+            <div class="invalid-feedback d-block">
+              {{ invoice_form.data_vencimento.errors[0] }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Descrição -->
+      <div class="mb-3">
+        {{ invoice_form.historico.label(text="Descrição", class="form-label") }}
+        {{ invoice_form.historico(class="form-control", rows=2) }}
+        {% if invoice_form.historico.errors %}
+          <div class="invalid-feedback d-block">
+            {{ invoice_form.historico.errors[0] }}
+          </div>
+        {% endif %}
+      </div>
+
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </form>
+  </div>
+</div>

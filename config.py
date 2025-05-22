@@ -8,7 +8,7 @@ FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'sua_chave_secreta_aqui'
-
+    
     if FLASK_ENV == 'production':
         # Conexão TCP direta ao Cloud SQL via IP privada
         DB_USER = os.environ['DB_USER']

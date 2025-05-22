@@ -1,135 +1,197 @@
-from flask import Flask, session
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_login import LoginManager
-from flask_mail import Mail
-from config import Config
-import logging
-from logging.handlers import RotatingFileHandler
-from datetime import timedelta
 import os
 import json
+import logging
+from logging.handlers import RotatingFileHandler
+from datetime import timedelta, date
+
+from flask import Flask, session, redirect, url_for, flash, request, jsonify
+from flask_wtf.csrf import CSRFError
 from markupsafe import Markup
 
-db = SQLAlchemy()
-mail = Mail()
-migrate = Migrate()
-login_manager = LoginManager()
+from config import Config
+from app.extensions import db, migrate, login_manager, mail, csrf
+from app.auth.models import User
+
 
 def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
-    app.config['SESSION_PERMANENT'] = False
-    app.jinja_env.globals['timedelta'] = timedelta
+    # --- CRIAÇÃO E CONFIGURAÇÃO DA APP ---
+    flask_app = Flask(__name__, instance_relative_config=True)
+    flask_app.config.from_object(Config)
+    flask_app.config['SESSION_PERMANENT'] = False
 
-    @app.before_request
+    # --- SESSÃO NÃO-PERMANENTE ---
+    @flask_app.before_request
     def make_session_non_permanent():
         session.permanent = False
 
-    # Inicialização de extensões
-    db.init_app(app)
-    migrate.init_app(app, db)
-    login_manager.init_app(app)
-    mail.init_app(app)
+    # --- JINJA GLOBALS & FILTERS ---
+    flask_app.jinja_env.globals['timedelta'] = timedelta
+    flask_app.jinja_env.globals['getattr']   = getattr
+    flask_app.jinja_env.globals['hasattr']   = hasattr
 
-    login_manager.login_view = 'main.login'
-    
-    from app.models import User
-    @login_manager.user_loader
-    def load_user(user_id):
-        return User.query.get(int(user_id))
-    
-    # Disponibiliza getattr no ambiente Jinja
-    app.jinja_env.globals['getattr'] = getattr
-    # Disponibiliza hasattr para uso nos templates
-    app.jinja_env.globals['hasattr'] = hasattr
-
-    # Registro do filtro 'get_attr'
     def get_attr(obj, attr_name):
         try:
             return getattr(obj, attr_name)
         except AttributeError:
             return None
-    app.jinja_env.filters['get_attr'] = get_attr
+    flask_app.jinja_env.filters['get_attr'] = get_attr
 
-    # --- Definição do filtro personalizado render_snapshot com nomes amigáveis ---
     CAMPO_LABELS = {
-        "nome_tarefa": "Nome",
-        "descricao": "Descrição",
-        "due_date": "Data de Vencimento",
-        "sort_order": "Ordem",
-        "is_completed": "Concluído",
-        "horas": "Horas",
-        "horas_adicionadas": "Horas Adicionadas",
-        "total_horas": "Horas Totais"
+        "nome_tarefa":      "Nome",
+        "descricao":        "Descrição",
+        "due_date":         "Data de Vencimento",
+        "sort_order":       "Ordem",
+        "is_completed":     "Concluído",
+        "horas":            "Horas",
+        "horas_adicionadas":"Horas Adicionadas",
+        "total_horas":      "Horas Totais"
     }
 
     def render_snapshot(value):
-        """
-        Converte uma string JSON ou um dicionário em uma lista HTML formatada com nomes amigáveis.
-        
-        Exemplo:
-        {
-            "nome_tarefa": {"old": "Antigo", "new": "Novo"},
-            "due_date": {"old": "2025-04-01", "new": "2025-04-08"}
-        }
-        
-        Será renderizado como:
-        <ul style="list-style: none; padding-left: 0;">
-            <li><strong>Nome:</strong> Antes: Antigo, Depois: Novo</li>
-            <li><strong>Data de Vencimento:</strong> Antes: 2025-04-01, Depois: 2025-04-08</li>
-        </ul>
-        """
-        # Se já for um dict, usa-o; caso contrário, tenta interpretar como JSON
         if isinstance(value, dict):
             data = value
         else:
             try:
                 data = json.loads(value)
             except Exception:
-                return value  # Se não for um JSON válido, retorna o valor original
+                return value
 
         html = "<ul style='list-style: none; padding-left: 0;'>"
-        for campo, alteracoes in data.items():
-            # Busca um label amigável; se não houver, usa o próprio nome do campo
+        for campo, alter in data.items():
             label = CAMPO_LABELS.get(campo, campo)
-            if isinstance(alteracoes, dict) and "old" in alteracoes and "new" in alteracoes:
-                html += f"<li><strong>{label}:</strong> Antes: {alteracoes.get('old')}, Depois: {alteracoes.get('new')}</li>"
+            if isinstance(alter, dict) and "old" in alter and "new" in alter:
+                html += (
+                    f"<li><strong>{label}:</strong> Antes: {alter['old']}, "
+                    f"Depois: {alter['new']}</li>"
+                )
             else:
-                html += f"<li><strong>{label}:</strong> {alteracoes}</li>"
+                html += f"<li><strong>{label}:</strong> {alter}</li>"
         html += "</ul>"
         return Markup(html)
 
-    app.jinja_env.filters['render_snapshot'] = render_snapshot
-    # -----------------------------------------------------------
+    flask_app.jinja_env.filters['render_snapshot'] = render_snapshot
 
-    
-    # Configuração de logging
-    # Se estiver em ambiente de desenvolvimento (DEBUG=True) ou não estiver no App Engine, cria log em arquivo.
-    if app.config.get("DEBUG") or os.environ.get("GAE_INSTANCE") is None:
+    # --- LOGGING ---
+    if flask_app.config.get("DEBUG") or os.environ.get("GAE_INSTANCE") is None:
         if not os.path.exists('logs'):
             os.mkdir('logs')
-        file_handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
-        file_handler.setFormatter(logging.Formatter(
+        handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
+        handler.setFormatter(logging.Formatter(
             '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
         ))
-        file_handler.setLevel(logging.INFO)
-        app.logger.addHandler(file_handler)
-        app.logger.info('Debug AdGest startup')
+        handler.setLevel(logging.INFO)
+        flask_app.logger.addHandler(handler)
+        flask_app.logger.info('Debug AdGest startup')
     else:
-        # Em ambiente de produção (App Engine), não escrevemos logs em arquivo, pois o sistema é somente leitura.
-        # O App Engine coleta o stdout/stderr automaticamente.
-        app.logger.info('Production startup – logs will be sent to stdout')
+        flask_app.logger.info('Production startup – logs to stdout')
 
-    @app.context_processor
-    def inject_today():
-        from datetime import date
-        return dict(today=date.today())
-    
-    from app.routes import main as main_blueprint
-    app.register_blueprint(main_blueprint)
+    # --- INICIALIZAÇÃO DAS EXTENSÕES ---
+    db.init_app(flask_app)
+    migrate.init_app(flask_app, db)
+    login_manager.init_app(flask_app)
+    mail.init_app(flask_app)
+    csrf.init_app(flask_app)
 
-    from app.accounting import accounting as accounting_blueprint
-    app.register_blueprint(accounting_blueprint, url_prefix='/accounting')
+    @flask_app.errorhandler(CSRFError)
+    def handle_csrf_error(e):
+        # se for AJAX, devolve JSON 400
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(error=e.description), 400
+        # senão, flash + redirect normal
+        flash(e.description, 'danger')
+        return redirect(url_for('auth.login'))
 
-    return app
+    # --- FORÇA CARREGAMENTO DE MODELS PARA QUE RELATIONSHIPS FUNCIONEM ---
+    with flask_app.app_context():
+        import app.auth.models
+        import app.clientes.models
+        import app.assuntos.models
+        import app.processos.models
+        import app.prazos.models
+        import app.tarefas.models
+        import app.billing.models
+
+    # --- FLASK-LOGIN CONFIG ---
+    login_manager.login_view = 'auth.login'
+
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+
+    # --- INJETAR HOJE E NOTIFICAÇÕES DIRETO EM jinja_env.globals ---
+
+    # 1) hoje
+    flask_app.jinja_env.globals['today'] = date.today
+
+    # 2) notificações
+    def _get_notifications():
+        from flask_login import current_user
+        if current_user.is_authenticated:
+            from app.notifications.models import Notification
+            notifs = (
+                Notification.query
+                .filter_by(user_id=current_user.id, is_read=False)
+                .order_by(Notification.timestamp.desc())
+                .all()
+            )
+            return notifs
+        return []
+
+    @flask_app.context_processor
+    def inject_notifications():
+        from flask_login import current_user
+        from app.notifications.models import Notification
+
+        if current_user.is_authenticated:
+           # somente não-lidas
+           notifs = (
+               Notification.query
+               .filter_by(user_id=current_user.id, is_read=False)
+               .order_by(Notification.timestamp.desc())
+               .all()
+           )
+           # contador igual ao tamanho da lista
+           unread = len(notifs)
+        else:
+            notifs = []
+            unread = 0
+
+        return {
+            'notifications': notifs,      # lista
+            'unread_count': unread       # inteiro
+        }
+
+    # --- REGISTRO DE BLUEPRINTS ---
+    from app.auth             import auth_bp
+    from app.dashboard        import dashboard_bp
+    from app.index            import index_bp
+    from app.dashboard_prazos import dashboard_prazos_bp
+    from app.assuntos         import assuntos_bp
+    from app.tarefas          import tarefas_bp
+    from app.prazos           import prazos_bp
+    from app.processos        import processos_bp
+    from app.clientes         import clientes_bp
+    from app.billing          import billing_bp
+    from app.notifications    import notifications_bp
+    from app.accounting       import accounting as accounting_bp
+
+
+    flask_app.register_blueprint(index_bp)
+    flask_app.register_blueprint(auth_bp)
+    flask_app.register_blueprint(dashboard_bp)
+    flask_app.register_blueprint(dashboard_prazos_bp)
+    flask_app.register_blueprint(assuntos_bp)
+    flask_app.register_blueprint(tarefas_bp)
+    flask_app.register_blueprint(prazos_bp)
+    flask_app.register_blueprint(processos_bp)
+    flask_app.register_blueprint(clientes_bp)
+    flask_app.register_blueprint(billing_bp)
+    flask_app.register_blueprint(notifications_bp)
+    flask_app.register_blueprint(accounting_bp, url_prefix='/accounting')
+
+
+    @flask_app.route('/favicon.ico')
+    def favicon():
+        return flask_app.send_static_file('icons/icon-192x192.png')
+
+    return flask_app

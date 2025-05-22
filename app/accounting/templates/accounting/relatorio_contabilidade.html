@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Relatório de Contabilidade{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <h2 class="mb-3">Relatório de Contabilidade</h2>
+
+  {# Mapeamento de labels para Tipo e Status #}
+  {% set tipo_labels   = dict(invoice_form.tipo.choices) %}
+  {% set status_labels = dict(invoice_form.status.choices) %}
+
+  <!-- Resumo Geral -->
+  <div class="mb-4">
+    <p><strong>Total de Documentos:</strong> {{ documentos|length }}</p>
+    <p><strong>Total Pago:</strong> {{ total_paid }} €</p>
+    <p><strong>Total Pendente:</strong> {{ total_unpaid }} €</p>
+    <p><strong>Valor Total:</strong> {{ total_valor }} €</p>
+  </div>
+
+  <!-- Filtros Aplicados -->
+  <div class="mb-4">
+    <h4>Filtros Aplicados:</h4>
+    <ul>
+      {% for key, value in filters.items() if value %}
+        <li><strong>{{ key|capitalize }}:</strong> {{ value }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Tabela de Documentos -->
+  <div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Doc.</th>
+          <th>Tipo</th>
+          <th>Emissão</th>
+          <th>Valor</th>
+          <th>Dias Atraso</th>
+          <th>Notas</th>
+          <th>Status</th>
+          <th>Advogado</th>
+          <th>Cliente</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for doc in documentos %}
+        <tr>
+          <td>{{ doc.numero or doc.id }}</td>
+          <td>
+            {{ tipo_labels.get(doc.tipo.value, doc.tipo.value) }}
+          </td>
+          <td>
+            {{ doc.data_emissao.strftime('%d/%m/%Y') if doc.data_emissao else 'N/A' }}
+          </td>
+          <td>
+            {{ "%.2f"|format(doc.valor) }} €
+          </td>
+          <td>
+            {{ doc.dias_atraso }}
+          </td>
+          <td>
+            {% if doc.notas %}
+              <ul class="mb-0 ps-3">
+                {% for nota in doc.notas %}
+                  <li><a href="{{ url_for('billing.view_nota', nota_id=nota.id) }}">#{{ nota.id }}</a></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td>
+            {{ status_labels.get(doc.status_cobranca.value, doc.status_cobranca.value) }}
+          </td>
+          <td>
+            {{ doc.advogado or 'N/A' }}
+          </td>
+          <td>
+            {{ doc.client.name }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center">Nenhum documento encontrado.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginação -->
+  {% if pagination.pages > 1 %}
+  <nav aria-label="Paginação">
+    <ul class="pagination">
+      {# Aqui podes renderizar os botões Previous/Next e números de página #}
+    </ul>
+  </nav>
+  {% endif %}
+
+  <!-- Botão de Impressão -->
+  <button onclick="window.print()" class="btn btn-primary">Imprimir Relatório</button>
+</div>
+{% endblock %}

@@ -1,0 +1,38 @@
+{%- macro render_field(field, **kwargs) -%}
+  {#-- Copia kwargs para manipulação --#}
+  {%- set attrs = kwargs.copy() -%}
+
+  {#-- Extrai classes personalizadas --#}
+  {%- set classes = [] -%}
+  {%- if attrs.pop('class', None) -%}
+    {%- do classes.append(kwargs.get('class')) -%}
+  {%- endif -%}
+  {%- if attrs.pop('class_', None) -%}
+    {%- do classes.append(kwargs.get('class_')) -%}
+  {%- endif -%}
+
+  {#-- Classe base e de erro --#}
+  {%- set base = 'form-control' -%}
+  {%- if field.errors -%}
+    {%- set base = base + ' is-invalid' -%}
+  {%- endif -%}
+
+  {#-- Monta string de classes --#}
+  {%- set class_str = base + (' ' + ' '.join(classes) if classes else '') -%}
+
+  <div class="mb-3">
+    <label for="{{ field.id }}" class="form-label">{{ field.label.text }}</label>
+    {{ field(**attrs, class_=class_str) }}
+
+    {%- if field.errors -%}
+      <div class="invalid-feedback">
+        {%- for err in field.errors -%}
+          <div>{{ err }}</div>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+    {%- if field.description -%}
+      <div class="form-text">{{ field.description }}</div>
+    {%- endif -%}
+  </div>
+{%- endmacro -%}

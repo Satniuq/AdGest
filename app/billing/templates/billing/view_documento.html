@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% block title %}Fatura #{{ documento.id }}{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <!-- Cabeçalho da Fatura -->
+  <div class="row mb-4 align-items-center">
+    <div class="col-sm-6">
+      <h2 class="mb-1">FATURA</h2>
+      <p class="mb-0">Número: <strong>{{ documento.numero or '—' }}</strong></p>
+    </div>
+    <div class="col-sm-6 text-sm-right">
+      <p class="mb-1">Emitido em: <strong>{% if documento.data_emissao %}{{ documento.data_emissao.strftime('%d/%m/%Y') }}{% else %}—{% endif %}</strong></p>
+      <p class="mb-0">Vencimento: <strong>{% if documento.data_vencimento %}{{ documento.data_vencimento.strftime('%d/%m/%Y') }}{% else %}—{% endif %}</strong></p>
+    </div>
+  </div>
+
+  <!-- Informações do Emissor -->
+  <div class="row invoice-info mb-4">
+    <div class="col-sm-6">
+      <h5 class="mb-2">De:</h5>
+      <p class="mb-1">{{ documento.advogado or '—' }}</p>
+      <p class="mb-1">Cliente Interno: {{ documento.client.name }}</p>
+      <p class="mb-0">Nº Cliente: {{ documento.numero_cliente or '—' }}</p>
+    </div>
+  </div>
+
+  <!-- Itens da Fatura -->
+  <div class="table-responsive mb-4">
+    <table class="table table-bordered">
+      <thead class="thead-light">
+        <tr>
+          <th>Descrição</th>
+          <th class="text-center">Status</th>
+          <th class="text-center">Valor (€)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ documento.details or 'Serviços Contábeis' }}</td>
+          <td class="text-center">{{ documento.status_cobranca.value|capitalize }}</td>
+          <td class="text-center">{{ '%.2f'|format(documento.valor) }}</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="2" class="text-right">Total</th>
+          <th class="text-center">{{ '%.2f'|format(documento.valor) }} €</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Recibo -->
+  <div class="row mb-4">
+    <div class="col-sm-6">
+      <p><strong>Recibo / NC:</strong> {{ documento.numero_recibo or '—' }}</p>
+    </div>
+  </div>
+
+  <!-- Notas de Honorários -->
+  <h5>Notas de Honorários Vinculadas</h5>
+  {% if documento.notas %}
+    <ul class="list-unstyled">
+      {% for nota in documento.notas %}
+        <li class="mb-1">Nota #{{ nota.id }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="mb-0">— Nenhuma nota associada —</p>
+  {% endif %}
+
+  <!-- Recibos Vinculados -->
+  <h5 class="mt-4">Recibos Vinculados</h5>
+  {% if documento.recibos %}
+    <p class="mb-0">
+      {% for recibo in documento.recibos %}
+        {{ recibo.id }}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </p>
+  {% else %}
+    <p class="mb-0">— Nenhum recibo associado —</p>
+  {% endif %}
+
+  <!-- Botão Voltar -->
+  <div class="text-center mt-5">
+    {% if request.referrer %}
+      <a href="{{ request.referrer }}" class="btn btn-outline-secondary">← Voltar</a>
+    {% else %}
+      <a href="{{ url_for('accounting.manage_invoices') }}" class="btn btn-outline-secondary">← Contabilidade</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

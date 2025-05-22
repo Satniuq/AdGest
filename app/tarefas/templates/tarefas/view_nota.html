@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="container py-4">
+  <h3>Nota de Honorários #{{ nota.id }}</h3>
+  <p>
+    <strong>Tarefa:</strong> {{ nota.tarefa.title }}<br>
+    <strong>Processo:</strong> {{ nota.tarefa.assunto.title }}<br>
+    <strong>Cliente:</strong> {{ nota.tarefa.assunto.client.name }}<br>
+    <strong>Gerada em:</strong> {{ nota.created_at.strftime('%d/%m/%Y %H:%M') }} por {{ nota.creator.nickname }}
+  </p>
+
+  <table class="table table-sm">
+    <thead class="table-light">
+      <tr>
+        <th>Data/Hora</th>
+        <th>Quem</th>
+        <th>Horas</th>
+        <th>Descrição</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in items %}
+      <tr>
+        <td>{{ i.date.strftime('%d/%m %H:%M') }}</td>
+        <td>{{ i.user.nickname }}</td>
+        <td>{{ '%.2f'|format(i.hours) }}h</td>
+        <td>{{ i.description }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="fw-bold">
+        <td colspan="2">Total</td>
+        <td colspan="2">{{ '%.2f'|format(nota.total_hours) }}h</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <a href="{{ url_for('tarefas.history', id=nota.tarefa.id) }}"
+     class="btn btn-secondary">
+    ← Voltar ao Histórico
+  </a>
+</div>
+
+{% endblock %}

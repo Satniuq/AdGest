@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% import 'dashboard/macros.html' as m %}
+
+{# —— Título da aba do navegador dinâmico —— #}
+{% block title %}
+  {% if mode == 'assuntos' %}
+    Gestão de Assuntos
+  {% else %}
+    Gestão de Tarefas
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <!-- cabeçalho flex: título à esquerda, abas à direita -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">
+      {% if mode == 'assuntos' %}
+        Gestão de Assuntos
+      {% else %}
+        Gestão de Tarefas
+      {% endif %}
+    </h1>
+    <ul class="nav nav-tabs mb-0">
+      <li class="nav-item">
+        <a class="nav-link {% if mode=='assuntos' %}active{% endif %}"
+           href="{{ url_for('dashboard.dashboard', mode='assuntos') }}">
+          Assuntos
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if mode=='tarefas' %}active{% endif %}"
+           href="{{ url_for('dashboard.dashboard', mode='tarefas') }}">
+          Tarefas
+        </a>
+      </li>
+    </ul>
+     
+    </div>
+  </div>
+ 
+
+  <!-- Filtros -->
+  <form method="get" action="{{ url_for('dashboard.dashboard') }}" class="card mb-4 p-2">
+    <input type="hidden" name="mode" value="{{ mode }}">
+    <div class="row g-1 align-items-end">
+      <!-- Cliente -->
+      <div class="col-md-4">
+        <label class="form-label small">Cliente</label>
+        <select name="client_id" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for c in clientes %}
+            <option value="{{ c.id }}" {% if c.id==client_id %}selected{% endif %}>
+              {{ c.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if mode=='assuntos' %}
+        <!-- Data e ordenação de Assuntos -->
+        <div class="col-md-3">
+          <label class="form-label small">Data do Assunto</label>
+          <input type="date" name="due_date" value="{{ due_date or '' }}"
+                 class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Ordenação</label>
+          <select name="sort" class="form-select form-select-sm">
+            <option value="asc"  {% if sort=='asc'  %}selected{% endif %}>Mais Antigos</option>
+            <option value="desc" {% if sort=='desc' %}selected{% endif %}>Mais Recentes</option>
+          </select>
+        </div>
+      {% else %}
+        <!-- Data, status e ordenação de Tarefas -->
+        <div class="col-md-3">
+          <label class="form-label small">Data de Vencimento</label>
+          <input type="date" name="due_date" value="{{ due_date or '' }}"
+                 class="form-control form-control-sm">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="open" {% if status=='open' %}selected{% endif %}>Aberto</option>
+            <option value="done" {% if status=='done' %}selected{% endif %}>Concluído</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small">Ordenação</label>
+          <select name="sort" class="form-select form-select-sm">
+            <option value="nearest"  {% if sort=='nearest'  %}selected{% endif %}>Mais Próximas</option>
+            <option value="farthest" {% if sort=='farthest' %}selected{% endif %}>Mais Distantes</option>
+          </select>
+        </div>
+      {% endif %}
+
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-lg shadow-sm">
+          <i class="bi bi-filter-circle-fill me-1"></i> Filtrar
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <!-- Card com a lista -->
+  <div class="card">
+    <div class="card-body p-0">
+      {% if mode=='assuntos' %}
+        {% include 'dashboard/_assuntos_list.html' %}
+      {% else %}
+        {% include 'dashboard/_tarefas_list.html' %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% include 'dashboard/sortable_script.html' %}
+{% endblock %}

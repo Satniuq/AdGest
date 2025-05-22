@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Editar Tarefa{% endblock %}
+{% from "macros.html" import render_field %}
+
+{% block content %}
+  <h2>Editar Tarefa "{{ tarefa.title }}"</h2>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    {{ render_field(form.title) }}
+    {{ render_field(form.description) }}
+    {{ render_field(form.due_date) }}
+    {{ render_field(form.sort_order) }}
+    {{ render_field(form.hours_estimate) }}
+    {{ render_field(form.status) }}
+    {{ render_field(form.reminder_offset) }}
+    {{ render_field(form.recurrence_rule) }}
+    {{ render_field(form.shared_with) }}
+    {{ form.calendar_event_id() }}
+    {{ form.notified_at() }}
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+  <p><a href="{{ url_for('tarefas.list_for_assunto', assunto_id=tarefa.assunto.id) }}"
+        class="btn btn-outline-secondary">Voltar</a></p>
+{% endblock %}

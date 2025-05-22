@@ -1,0 +1,72 @@
+{# templates/notifications.html #}
+{% extends "base.html" %}
+
+{% block title %}Notificações{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h1 class="mb-4">Notificações</h1>
+
+  <div id="notifications-list">
+    {% if notifications %}
+      {% for notif in notifications %}
+        <div class="notification-item mb-3 p-3 border rounded d-flex justify-content-between align-items-start">
+          <div>
+            <p class="mb-1">{{ notif.message }}</p>
+            <small class="text-muted">{{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}</small>
+          </div>
+          <button
+            class="btn btn-sm btn-outline-secondary mark-read-btn"
+            data-url="{{ url_for('notifications.mark_read', notif_id=notif.id) }}">
+            Marcar como Lida
+          </button>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>Não tens notificações novas.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    document.querySelectorAll('.mark-read-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        fetch(btn.dataset.url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
+        .then(async resp => {
+          console.groupCollapsed(`Resposta AJAX para ${btn.dataset.url}`);
+          console.log('Status:', resp.status);
+          console.log('Content-Type:', resp.headers.get('content-type'));
+          const text = await resp.text();
+          console.log('Body (texto completo):', text);
+          console.groupEnd();
+          
+          if (resp.status === 204) {
+            btn.closest('.notification-item').remove();
+            return;
+          }
+          // tenta JSON
+          let err;
+          try {
+            err = JSON.parse(text).error;
+          } catch {
+            err = text || resp.status;
+          }
+          throw new Error(err);
+        })
+        .catch(err => alert('Erro: ' + err.message));
+      });
+    });
+  </script>
+
+{% endblock %}

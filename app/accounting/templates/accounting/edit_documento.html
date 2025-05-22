@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}Editar Documento #{{ doc.id }}{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+  <h3 class="mb-4">Editar Documento #{{ doc.id }}</h3>
+  <form method="POST" action="{{ url_for('accounting.edit_documento', doc_id=doc.id) }}">
+    {{ form.hidden_tag() }}
+
+    <!-- Cliente existente -->
+    <div class="mb-3">
+      {{ form.client_existing.label(class="form-label") }}
+      {{ form.client_existing(class="form-select") }}
+      {% if form.client_existing.errors %}
+        <div class="invalid-feedback d-block">{{ form.client_existing.errors[0] }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Notas vinculadas -->
+    <div class="row mb-3">
+      <div class="col-12">
+        {{ form.notas.label(class="form-label") }}
+        {{ form.notas(class="form-select", multiple=true, size=5) }}
+        {% if form.notas.errors %}
+          <div class="invalid-feedback d-block">{{ form.notas.errors[0] }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Dados principais -->
+    <div class="row mb-3">
+      <div class="col-md-3">
+        {{ form.numero.label(class="form-label") }}
+        {{ form.numero(class="form-control") }}
+        {% if form.numero.errors %}
+          <div class="invalid-feedback d-block">{{ form.numero.errors[0] }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-3">
+        {{ form.tipo.label(class="form-label") }}
+        {{ form.tipo(class="form-select") }}
+        {% if form.tipo.errors %}
+          <div class="invalid-feedback d-block">{{ form.tipo.errors[0] }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-3">
+        {{ form.data_emissao.label(class="form-label") }}
+        {{ form.data_emissao(class="form-control", type="date") }}
+        {% if form.data_emissao.errors %}
+          <div class="invalid-feedback d-block">{{ form.data_emissao.errors[0] }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-3">
+        {{ form.valor.label(class="form-label") }}
+        {{ form.valor(class="form-control") }}
+        {% if form.valor.errors %}
+          <div class="invalid-feedback d-block">{{ form.valor.errors[0] }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Dados adicionais -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        {{ form.advogado.label(class="form-label") }}
+        {{ form.advogado(class="form-control", placeholder="Advogado") }}
+        {% if form.advogado.errors %}
+          <div class="invalid-feedback d-block">{{ form.advogado.errors[0] }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-4">
+        {{ form.status.label(class="form-label") }}
+        {{ form.status(class="form-select") }}
+        {% if form.status.errors %}
+          <div class="invalid-feedback d-block">{{ form.status.errors[0] }}</div>
+        {% endif %}
+      </div>
+      <div class="col-md-4">
+        {{ form.data_vencimento.label(class="form-label") }}
+        {{ form.data_vencimento(class="form-control", type="date") }}
+        {% if form.data_vencimento.errors %}
+          <div class="invalid-feedback d-block">{{ form.data_vencimento.errors[0] }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Descrição -->
+    <div class="mb-3">
+      {{ form.historico.label(text="Descrição", class="form-label") }}
+      {{ form.historico(class="form-control", rows=2) }}
+      {% if form.historico.errors %}
+        <div class="invalid-feedback d-block">{{ form.historico.errors[0] }}</div>
+      {% endif %}
+    </div>
+
+    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+    <a href="{{ url_for('accounting.contabilidade_cliente', client_id=doc.client_id) }}" class="btn btn-secondary ms-2">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

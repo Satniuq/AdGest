@@ -1,7 +1,7 @@
 from functools import wraps
 from flask import abort, current_app, flash, redirect, url_for
 from flask_login import current_user
-from app.models import db
+from app import db
 
 def admin_required(f):
     @wraps(f)
@@ -25,7 +25,7 @@ def role_required(allowed_roles):
         def wrapper(*args, **kwargs):
             if current_user.role != 'admin' and current_user.role not in allowed_roles:
                 flash('Acesso negado. Você não tem permissão para acessar esta página.', 'danger')
-                return redirect(url_for('main.index'))
+                return redirect(url_for('dashboard.index'))
             return f(*args, **kwargs)
         return wrapper
     return decorator
@@ -49,5 +49,5 @@ def handle_db_errors(f):
             # Exibe uma mensagem flash de erro para o usuário
             flash(f'Ocorreu um erro: {str(e)}', 'danger')
             # Redireciona para uma rota de fallback; aqui, estamos usando o dashboard
-            return redirect(url_for('main.dashboard'))
+            return redirect(url_for('dashboard.dashboard'))
     return wrapper
