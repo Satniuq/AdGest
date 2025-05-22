@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 
+from app.utils import OFFICE_ROLES
 from app.clientes.forms import ClientForm, ShareForm
 from app.clientes.forms   import UploadCSVForm
 from app.clientes.models import Client, ClientShare
@@ -54,10 +55,12 @@ def create_client():
     form = ClientForm()
     form.current_user = current_user
     if form.validate_on_submit():
+        is_public = current_user.role in OFFICE_ROLES
         try:
             client_service.create_client(
                 user_id=current_user.id,
                 name=form.name.data,
+                is_public=is_public,
                 number_interno=form.number_interno.data,
                 nif=form.nif.data,
                 address=form.address.data,
@@ -159,10 +162,12 @@ def edit_client(client_id):
     form = ClientForm(obj=client)
     form.current_user = current_user
     if form.validate_on_submit():
+        is_public = current_user.role in OFFICE_ROLES
         try:
             client_service.update_client(
                 client_id=client.id,
                 name=form.name.data,
+                is_public=is_public,
                 number_interno=form.number_interno.data,
                 nif=form.nif.data,
                 address=form.address.data,

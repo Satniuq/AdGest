@@ -26,14 +26,16 @@ def list_clients(
     per_page: int = 10,
     search: str = ''
 ):
-    # próprios
-    own_q = Client.query.filter(Client.user_id == user_id)
+    # escritório (públicos)
+    public_q = Client.query.filter(Client.is_public.is_(True))
+    # próprios (privados do utilizador)
+    own_q    = Client.query.filter(Client.user_id == user_id)
     # partilhados
-    shared_q = Client.query.\
-       join(ClientShare, Client.id == ClientShare.client_id).\
-       filter(ClientShare.user_id == user_id)
-    # união
-    query = own_q.union_all(shared_q)
+    shared_q = Client.query\
+       .join(ClientShare, Client.id == ClientShare.client_id)\
+       .filter(ClientShare.user_id == user_id)
+    # união de todos
+    query = public_q.union_all(own_q).union_all(shared_q)
 
     if search:
         term = f"%{search}%"
@@ -48,9 +50,9 @@ def list_clients(
 
 def get_client_or_404(client_id: int, user_id: int) -> Client:
     client = Client.query.get_or_404(client_id)
-    # permito owner ou quem recebeu partilha
+    # permito leitura se for público, owner ou shared
     is_shared = client.shared_with.filter_by(id=user_id).first() is not None
-    if client.user_id != user_id and not is_shared:
+    if not (client.is_public or client.user_id == user_id or is_shared):
         abort(404)
     return client
 
@@ -63,11 +65,13 @@ def create_client(
     address: Optional[str],
     email: Optional[str],
     telephone: Optional[str],
-    shared_with: Optional[List[User]] = None
+    shared_with: Optional[List[User]] = None,
+    is_public: bool = False
 ) -> Client:
     client = Client(
         user_id=user_id,
         name=name.strip(),
+        is_public=is_public,
         number_interno=number_interno.strip() if number_interno else None,
         nif=nif.strip() if nif else None,
         address=address.strip() if address else None,
@@ -99,6 +103,7 @@ def create_client(
 def update_client(
     client_id: int,
     name: str,
+    is_public: bool,
     number_interno: Optional[str],
     nif: Optional[str],
     address: Optional[str],
@@ -106,6 +111,7 @@ def update_client(
     telephone: Optional[str]
 ) -> Client:
     client = Client.query.get_or_404(client_id)
+    client.is_public = is_public
     client.name = name.strip()
     client.number_interno = number_interno.strip() if number_interno else None
     client.nif = nif.strip() if nif else None
@@ -180,6 +186,8 @@ def import_clients(
             ).first()
 
         if client:
+            # Marca sempre como público
+            client.is_public = True
             # Atualiza campos: nome só se não conflitar
             if name and name != client.name and not name_conflicts(name, exclude_id=client.id):
                 client.name = name
@@ -199,6 +207,7 @@ def import_clients(
             client = Client(
                 user_id=user_id,
                 name=new_name,
+                is_public=True,
                 number_interno=number_interno or None,
                 nif=nif or None,
                 address=address or None,

@@ -1,6 +1,9 @@
 # app/utils.py
 import unicodedata
 
+OFFICE_ROLES = {'admin', 'administrativo', 'backoffice'}
+
+
 def normalize_header(header: str) -> str:
     """
     Remove acentuação e espaço em branco de um cabeçalho de CSV,

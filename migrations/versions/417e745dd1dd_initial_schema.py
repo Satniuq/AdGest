@@ -1,8 +1,8 @@
 """Initial schema
 
-Revision ID: d9a55be00293
+Revision ID: 417e745dd1dd
 Revises: 
-Create Date: 2025-05-14 14:28:25.294121
+Create Date: 2025-05-23 00:00:00.538801
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'd9a55be00293'
+revision = '417e745dd1dd'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -91,6 +91,7 @@ def upgrade():
     op.create_table('clients',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('is_public', sa.Boolean(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('number_interno', sa.String(length=50), nullable=True),
     sa.Column('nif', sa.String(length=50), nullable=True),
@@ -144,6 +145,14 @@ def upgrade():
     sa.ForeignKeyConstraint(['case_type_id'], ['case_types.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('tmp_documento',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('data', sa.JSON(), nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('assuntos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(length=255), nullable=False),
@@ -178,7 +187,7 @@ def upgrade():
     op.create_table('client_shares',
     sa.Column('client_id', sa.Integer(), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('option', sa.String(length=50), nullable=False),
+    sa.Column('option', sa.String(length=20), nullable=False),
     sa.ForeignKeyConstraint(['client_id'], ['clients.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('client_id', 'user_id')
@@ -191,18 +200,25 @@ def upgrade():
     sa.Column('advogado', sa.String(length=100), nullable=True),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.Column('data_emissao', sa.Date(), nullable=True),
-    sa.Column('tipo', sa.String(length=50), nullable=False),
+    sa.Column('tipo', sa.Enum('fatura', 'despesa', name='doc_tipo', native_enum=False), nullable=False),
     sa.Column('details', sa.Text(), nullable=True),
-    sa.Column('valor', sa.Float(), nullable=False),
+    sa.Column('valor', sa.Numeric(precision=12, scale=2), nullable=False),
     sa.Column('is_confirmed', sa.Boolean(), nullable=True),
-    sa.Column('status_cobranca', sa.String(length=50), nullable=True),
+    sa.Column('status_cobranca', sa.Enum('pendente', 'paga', 'tentativa_cobranca', 'em_tribunal', 'incobravel', name='status_cobranca', native_enum=False), nullable=True),
     sa.Column('numero_recibo', sa.String(length=50), nullable=True),
     sa.Column('data_vencimento', sa.Date(), nullable=True),
     sa.Column('numero_cliente', sa.String(length=50), nullable=True),
     sa.ForeignKeyConstraint(['client_id'], ['clients.id'], ),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('client_id', 'tipo', 'numero', name='uq_cliente_tipo_numero')
     )
+    with op.batch_alter_table('documentos_contabilisticos', schema=None) as batch_op:
+        batch_op.create_index('idx_doc_data_emissao', ['data_emissao'], unique=False)
+        batch_op.create_index('idx_doc_data_vencimento', ['data_vencimento'], unique=False)
+        batch_op.create_index('idx_doc_status', ['status_cobranca'], unique=False)
+        batch_op.create_index('idx_user_status', ['user_id', 'status_cobranca'], unique=False)
+
     op.create_table('processos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('external_id', sa.String(length=100), nullable=True),
@@ -229,13 +245,6 @@ def upgrade():
     with op.batch_alter_table('processos', schema=None) as batch_op:
         batch_op.create_index('ix_processos_ext', ['external_id'], unique=False)
 
-    op.create_table('shared_clients',
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('client_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['client_id'], ['clients.id'], ),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('user_id', 'client_id')
-    )
     op.create_table('assunto_history',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('assunto_id', sa.Integer(), nullable=False),
@@ -537,15 +546,21 @@ def downgrade():
     op.drop_table('billing_nota_items')
     op.drop_table('assunto_notes')
     op.drop_table('assunto_history')
-    op.drop_table('shared_clients')
     with op.batch_alter_table('processos', schema=None) as batch_op:
         batch_op.drop_index('ix_processos_ext')
 
     op.drop_table('processos')
+    with op.batch_alter_table('documentos_contabilisticos', schema=None) as batch_op:
+        batch_op.drop_index('idx_user_status')
+        batch_op.drop_index('idx_doc_status')
+        batch_op.drop_index('idx_doc_data_vencimento')
+        batch_op.drop_index('idx_doc_data_emissao')
+
     op.drop_table('documentos_contabilisticos')
     op.drop_table('client_shares')
     op.drop_table('billing_notas')
     op.drop_table('assuntos')
+    op.drop_table('tmp_documento')
     op.drop_table('phases')
     op.drop_table('notifications')
     op.drop_table('horas_adicao')

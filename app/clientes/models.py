@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Table, Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Table, Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import relationship, backref
 from app import db
 
@@ -9,6 +9,7 @@ class Client(db.Model):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    is_public = Column(Boolean, nullable=False, default=False)
     name = Column(String(100), nullable=False)
     number_interno = Column(String(50))
     nif = Column(String(50))

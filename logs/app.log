@@ -106,3 +106,4 @@ Traceback (most recent call last):
     raise ValueError(msg % (key, type(value)))
 ValueError: Attribute 'data' does not accept objects of type <class 'list'>
 2025-05-21 23:18:38,484 ERROR: Erro ao compartilhar cliente: Could not build url for endpoint 'clientes.client_info' with values ['client_id']. Did you mean 'client.client_info' instead? [in C:\Python\AdGest - Cópia\app\clientes\routes.py:188]
+2025-05-23 00:06:56,528 ERROR: Erro ao criar cliente: create_client() got an unexpected keyword argument 'is_public' [in C:\Python\AdGest\app\clientes\routes.py:79]

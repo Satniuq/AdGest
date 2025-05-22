@@ -1,6 +1,6 @@
 # app/clientes/forms.py
 from flask_wtf import FlaskForm
-from wtforms import StringField, SubmitField, ValidationError
+from wtforms import StringField, SubmitField, ValidationError, BooleanField
 from flask_wtf.file import FileField, FileAllowed
 from wtforms.validators import DataRequired, Optional
 from wtforms_sqlalchemy.fields import QuerySelectMultipleField
