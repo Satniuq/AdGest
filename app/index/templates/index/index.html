@@ -1,0 +1,230 @@
+{# app/index/templates/index/index.html #}
+
+{% extends 'base.html' %}
+
+{% block extra_css %}
+  {{ super() }}
+  <!-- FullCalendar CSS (bundle único) -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.4/main.min.css"
+    rel="stylesheet"
+  />
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  {# — HEADER DE CARDS — #}
+  <header class="mb-4">
+    <div class="d-flex justify-content-between align-items-start">
+      
+      {# Grupo Tarefas #}
+      <div>
+        <small class="text-secondary">Tarefas</small>
+        <div class="d-flex flex-nowrap align-items-stretch" style="gap: 1rem; margin-top: 0.25rem;">
+          <div class="card border-danger text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-exclamation-circle fa-2x text-danger mb-2"></i>
+              <h3>{{ counts.tasks_overdue }}</h3>
+              <p class="mb-0">Atrasadas</p>
+            </div>
+          </div>
+          <div class="card border-info text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-calendar-day fa-2x text-info mb-2"></i>
+              <h3>{{ counts.tasks_today }}</h3>
+              <p class="mb-0">Hoje</p>
+            </div>
+          </div>
+          <div class="card border-warning text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-calendar-alt fa-2x text-warning mb-2"></i>
+              <h3>{{ counts.tasks_tomorrow }}</h3>
+              <p class="mb-0">Amanhã</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {# Divider vertical #}
+      <div class="vr mx-4"></div>
+
+      {# Grupo Prazos #}
+      <div>
+        <small class="text-secondary">Prazos</small>
+        <div class="d-flex flex-nowrap align-items-stretch" style="gap: 1rem; margin-top: 0.25rem;">
+          <div class="card border-danger text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-clock fa-2x text-danger mb-2"></i>
+              <h3>{{ counts.deadlines_overdue }}</h3>
+              <p class="mb-0">Atrasados</p>
+            </div>
+          </div>
+          <div class="card border-info text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-calendar-check fa-2x text-info mb-2"></i>
+              <h3>{{ counts.deadlines_today }}</h3>
+              <p class="mb-0">Hoje</p>
+            </div>
+          </div>
+          <div class="card border-warning text-center" style="min-width:10rem">
+            <div class="card-body">
+              <i class="fas fa-hourglass-half fa-2x text-warning mb-2"></i>
+              <h3>{{ counts.deadlines_tomorrow }}</h3>
+              <p class="mb-0">Amanhã</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  {# — CALENDÁRIO — #}
+  <div class="row">
+    <!-- Tarefas à esquerda -->
+    <div class="col-lg-3 mb-4">
+      <h5>Tarefas</h5>
+      <ul class="list-group">
+        <li class="list-group-item bg-light"><strong>Atrasadas</strong></li>
+        {% if tasks_overdue %}
+          {% for t in tasks_overdue %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ t.assunto.title }} – {{ t.title }}
+                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-danger ms-2">Atrasada</span>
+                {# Botão Histórico #}
+                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhuma tarefa atrasada.</li>
+        {% endif %}
+
+        <li class="list-group-item bg-light"><strong>Hoje</strong></li>
+        {% if tasks_today %}
+          {% for t in tasks_today %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ t.assunto.title }} – {{ t.title }}
+                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-info ms-2">Hoje</span>
+                {# Botão Histórico #}
+                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhuma tarefa para hoje.</li>
+        {% endif %}
+
+        <li class="list-group-item bg-light"><strong>Amanhã</strong></li>
+        {% if tasks_tomorrow %}
+          {% for t in tasks_tomorrow %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ t.assunto.title }} – {{ t.title }}
+                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-warning text-dark ms-2">Amanhã</span>
+                {# Botão Histórico #}
+                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhuma tarefa para amanhã.</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <!-- Calendário no centro -->
+    <div class="col-lg-6 mb-4">
+      {% include 'index/_calendar.html' %}
+    </div>
+
+    <!-- Prazos à direita -->
+    <div class="col-lg-3 mb-4">
+      <h5>Prazos</h5>
+      <ul class="list-group">
+        <li class="list-group-item bg-light"><strong>Atrasados</strong></li>
+        {% if deadlines_overdue %}
+          {% for p in deadlines_overdue %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
+                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-danger ms-2">Atrasado</span>
+                {# Botão Detalhes #}
+                <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhum prazo atrasado.</li>
+        {% endif %}
+
+        <li class="list-group-item bg-light"><strong>Hoje</strong></li>
+        {% if deadlines_today %}
+          {% for p in deadlines_today %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
+                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-info ms-2">Hoje</span>
+                {# Botão Detalhes #}
+                <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhum prazo para hoje.</li>
+        {% endif %}
+
+        <li class="list-group-item bg-light"><strong>Amanhã</strong></li>
+        {% if deadlines_tomorrow %}
+          {% for p in deadlines_tomorrow %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
+                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <span class="badge bg-warning text-dark ms-2">Amanhã</span>
+                {# Botão Detalhes #}
+                <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhum prazo para amanhã.</li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ super() }}
+  <!-- FullCalendar + nosso JS -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.4/index.global.min.js"></script>
+  <script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+{% endblock %}

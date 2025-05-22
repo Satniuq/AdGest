@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block title %}Contabilidade – {{ client.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid my-4">
+
+  <!-- Cabeçalho -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">Contabilidade: {{ client.name }}</h2>
+    <a href="{{ url_for('accounting.manage_invoices', **request.args) }}" class="btn btn-outline-secondary">
+      ← Voltar a Contabilidade
+    </a>
+  </div>
+
+  <!-- Filtros (herdados de manage_invoices, mas somando filtro cliente oculto) -->
+  <form method="get"
+        action="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}"
+        class="row gx-2 gy-2 align-items-end mb-4">
+    <input type="hidden" name="cliente_id" value="{{ client.id }}">
+    <div class="col-md-2">
+      <label for="tipo" class="form-label">Tipo</label>
+      <select name="tipo" id="tipo" class="form-select">
+        <option value="">Todos</option>
+        {% for val,label in invoice_form.tipo.choices %}
+          <option value="{{ val }}" {% if filters.tipo==val %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label for="data_emissao" class="form-label">Emissão</label>
+      <input type="date" name="data_emissao" id="data_emissao"
+             value="{{ filters.data_emissao or '' }}"
+             class="form-control">
+    </div>
+    <div class="col-md-2">
+      <label for="status" class="form-label">Status</label>
+      <select name="status" id="status" class="form-select">
+        <option value="">Todos</option>
+        {% for val,label in invoice_form.status.choices %}
+          <option value="{{ val }}" {% if filters.status==val %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+    </div>
+  </form>
+
+  {# Mapear labels #}
+  {% set tipo_labels   = dict(invoice_form.tipo.choices) %}
+  {% set status_labels = dict(invoice_form.status.choices) %}
+
+  <div class="row">
+    <!-- DOCUMENTOS PAGOS -->
+    <div class="col-md-6">
+      <h3>Pagos ({{ paid_invoices|length }})</h3>
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Doc.</th>
+              <th>Tipo</th>
+              <th>Recibo</th>
+              <th>Emissão</th>
+              <th>Valor</th>
+              <th>Mora</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in paid_invoices %}
+              <tr>
+                <td>{{ inv.numero or inv.id }}</td>
+                <td>{{ tipo_labels[inv.tipo.value] }}</td>
+                <td>{{ inv.numero_recibo or '–' }}</td>
+                <td>{{ inv.data_emissao.strftime('%d/%m/%Y') if inv.data_emissao else '–' }}</td>
+                <td>{{ "%.2f"|format(inv.valor) }} €</td>
+                <td>{{ inv.dias_atraso }}</td>
+                <td class="text-nowrap">
+                  <a href="{{ url_for('accounting.view_documento_por_id', doc_id=inv.id) }}"
+                    class="btn btn-sm btn-outline-info" title="Ver">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                  {# Botão “Editar #}
+                  <a href="{{ url_for('accounting.edit_documento', doc_id=inv.id) }}"
+                    class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="fas fa-pen"></i>
+                  </a>
+                  {# Botão de Status #}
+                  {% set current = inv.status_cobranca.value %}
+                  {% set label   = status_labels[current] %}
+
+                  {% if current == 'paga' %}
+                    {% set btn_class = 'btn-success' %}
+                  {% elif current == 'pendente' %}
+                    {% set btn_class = 'btn-danger' %}
+                  {% else %}
+                    {% set btn_class = 'btn-secondary' %}
+                  {% endif %}
+
+                  <button class="btn btn-sm {{ btn_class }}"
+                          data-bs-toggle="modal"
+                          data-bs-target="#modalStatus{{ inv.id }}">
+                    {{ label }}
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- DOCUMENTOS PENDENTES -->
+    <div class="col-md-6">
+      <h3>Pendentes ({{ pending_invoices|length }})</h3>
+      <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Doc.</th>
+              <th>Tipo</th>
+              <th>Recibo</th>
+              <th>Data</th>
+              <th>Valor</th>
+              <th>Mora</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in pending_invoices %}
+              <tr>
+                <td>{{ inv.numero or inv.id }}</td>
+                <td>{{ tipo_labels[inv.tipo.value] }}</td>
+                <td>{{ inv.numero_recibo or '–' }}</td>
+                <td>{{ inv.data_emissao.strftime('%d/%m/%Y') if inv.data_emissao else '–' }}</td>
+                <td>{{ "%.2f"|format(inv.valor) }} €</td>
+                <td>{{ inv.dias_atraso }}</td>
+                <td class="text-nowrap">
+                  <a href="{{ url_for('accounting.view_documento_por_id', doc_id=inv.id) }}"
+                    class="btn btn-sm btn-outline-info" title="Ver">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                  {# Botão “Editar #}
+                  <a href="{{ url_for('accounting.edit_documento', doc_id=inv.id) }}"
+                    class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="fas fa-pen"></i>
+                  </a>
+                  {# Botão de Status #}
+                  {% set current = inv.status_cobranca.value %}
+                  {% set label   = status_labels[current] %}
+
+                  {% if current == 'paga' %}
+                    {% set btn_class = 'btn-success' %}
+                  {% elif current == 'pendente' %}
+                    {% set btn_class = 'btn-danger' %}
+                  {% else %}
+                    {% set btn_class = 'btn-secondary' %}
+                  {% endif %}
+
+                  <button class="btn btn-sm {{ btn_class }}"
+                          data-bs-toggle="modal"
+                          data-bs-target="#modalStatus{{ inv.id }}">
+                    {{ label }}
+                  </button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modais de Alterar Status (para todas faturas exibidas) -->
+  {% for inv in paid_invoices + pending_invoices %}
+    <div class="modal fade" id="modalStatus{{ inv.id }}" tabindex="-1"
+         aria-labelledby="modalStatusLabel{{ inv.id }}" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form method="POST" action="{{ url_for('accounting.alterar_status_documento', doc_id=inv.id) }}">
+            {{ invoice_form.csrf_token }}
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalStatusLabel{{ inv.id }}">
+                Alterar Status: {{ inv.numero or inv.id }}
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label" for="status_{{ inv.id }}">Novo Status</label>
+                <select name="status" id="status_{{ inv.id }}" class="form-select">
+                  {% for val,label in invoice_form.status.choices %}
+                    <option value="{{ val }}" {% if val==inv.status_cobranca.value %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="mb-3">
+                <label for="recibo{{ inv.id }}" class="form-label">Nº Recibo</label>
+                <input type="text"
+                      name="numero_recibo"
+                      id="recibo{{ inv.id }}"
+                      class="form-control"
+                      value="{{ inv.numero_recibo or '' }}"
+                      placeholder="000123">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+
+  <!-- Paginação se houver -->
+  {% if pagination.pages > 1 %}
+    <nav aria-label="Paginação">
+      <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('accounting.contabilidade_cliente', page=pagination.prev_num, client_id=client.id, **request.args) }}">
+            « Anterior
+          </a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+          <li class="page-item {% if p==pagination.page %}active{% elif not p %}disabled{% endif %}">
+            {% if p %}
+              <a class="page-link"
+                 href="{{ url_for('accounting.contabilidade_cliente', page=p, client_id=client.id, **request.args) }}">
+                {{ p }}
+              </a>
+            {% else %}
+              <span class="page-link">…</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('accounting.contabilidade_cliente', page=pagination.next_num, client_id=client.id, **request.args) }}">
+            Próximo »
+          </a>
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% if request.args.get('modal') %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var modalId = "modalStatus" + {{ request.args.get('modal') }};
+    var el = document.getElementById(modalId);
+    if (el) new bootstrap.Modal(el).show();
+  });
+</script>
+{% endif %}

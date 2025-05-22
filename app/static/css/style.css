@@ -266,3 +266,41 @@ body.login-page {
   background-color: #5f7e34 !important;
   border-color: #5f7e34 !important;
 }
+
+.kanban-column {
+  background: #f8f9fa;
+  border-radius: .5rem;
+  padding: 1rem;
+  min-height: 300px;
+}
+
+.kanban-card {
+  cursor: grab;
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+/* torna os botões mais “mini” dentro do Kanban */
+.kanban-task-card .btn {
+  padding: 0.2rem 0.4rem;    /* menos espaçamento vertical e horizontal */
+  font-size: 0.75rem;       /* texto menor */
+  line-height: 1;           /* evita linhas muito altas */
+}
+
+/* opcional: reduz um pouco a altura dos dropdowns também */
+.kanban-task-card .dropdown-toggle {
+  padding: 0.2rem 0.4rem;
+}
+
+
+.col-lg-6 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+.scrollable-table {
+  max-height: 300px;    /* se quiser mais altura */
+  overflow-x: auto;     /* permitir scroll horizontal */
+}

@@ -1,0 +1,36 @@
+.kanban-column, aside { background: #fafafa; }
+.timeline { border-left: 2px solid #ccc; padding-left: 1rem; }
+.timeline .event { margin-bottom: 1rem; position: relative; }
+.timeline .event::before {
+  content: "";
+  width: 8px; height: 8px; background: #007bff;
+  border-radius: 50%;
+  position: absolute; left: -6px; top: 3px;
+}
+
+@media (max-width: 768px) {
+  /* Oculta coluna “Processo” (4ª) e “Categoria” (5ª) */
+  .table.table-striped th:nth-child(4),
+  .table.table-striped td:nth-child(4),
+  .table.table-striped th:nth-child(5),
+  .table.table-striped td:nth-child(5) {
+    display: none !important;
+  }
+}
+
+/* reduz botões de ação na lista de prazos em ~33% */
+#process-list .btn-group .btn,
+#process-list .dropdown .btn,
+#process-list .btn-sm {
+  padding: 0.2rem 0.3rem !important;
+  font-size: 0.7rem !important;
+  line-height: 1 !important;
+}
+
+/* altura máxima de 300px e scroll vertical */
+.scrollable-notes {
+  max-height: 300px;
+  overflow-y: auto;
+  /* para suavizar o scroll em iOS */
+  -webkit-overflow-scrolling: touch;
+}

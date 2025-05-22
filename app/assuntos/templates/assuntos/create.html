@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Criar Assunto{% endblock %}
+{% from "macros.html" import render_field %}
+
+{% block content %}
+  <h2>Criar Assunto</h2>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    {{ render_field(form.client_existing) }}
+    {{ render_field(form.client_new) }}
+    {{ render_field(form.title) }}
+    {{ render_field(form.due_date) }}
+    {{ render_field(form.sort_order) }}
+    {{ render_field(form.shared_with) }}
+    {{ form.submit(class="btn btn-primary") }}
+  </form>
+  <p><a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">Voltar</a></p>
+{% endblock %}

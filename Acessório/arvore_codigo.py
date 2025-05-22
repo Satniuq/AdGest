@@ -28,5 +28,5 @@ def print_tree(path, indent=""):
         print(indent + name)
 
 if __name__ == "__main__":
-    root_path = r"C:\Python\AdGest"
+    root_path = r"C:\Python\AdGest - Cópia"
     print_tree(root_path)

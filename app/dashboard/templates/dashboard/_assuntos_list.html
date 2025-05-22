@@ -1,0 +1,199 @@
+{# app/dashboard/templates/dashboard/_assuntos_list.html #}
+
+<div class="d-flex justify-content-end mb-2">
+  <a href="{{ url_for('assuntos.create') }}" class="btn btn-success">
+    <i class="fa-solid fa-plus"></i> Novo Assunto
+  </a>
+</div>
+
+
+<table class="table table-hover table-striped align-middle mb-0">
+  <thead class="table-light">
+    <tr>
+      <th>Assunto</th>
+      <th>Cliente</th>
+      <th>Data</th>
+      <th class="text-center">Horas</th>
+      <th class="text-end">Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for a in assuntos %}
+      <tr>
+        <td>
+          <a href="{{ url_for('assuntos.history', id=a.id) }}">{{ a.title }}</a>
+        </td>
+        <td>{{ a.client.name }}</td>
+        <td>
+          {{ (a.due_date or a.created_at).strftime('%d/%m/%Y') }}
+        </td>
+        <td class="text-center">{{ task_hours[a.id]|default(0) }}h</td>
+        <!-- nova coluna de status -->
+        <td class="text-center">
+          <form method="post"
+                action="{{ url_for('assuntos.toggle', id=a.id) }}">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit"
+                    class="btn btn-sm
+                      {% if a.status == 'open' %}
+                        btn-warning text-dark
+                      {% else %}
+                        btn-success
+                      {% endif %}"
+                    title="Alternar Status">
+              {{ a.status|capitalize }}
+            </button>
+          </form>
+        </td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#tasks-{{ a.id }}"
+                  aria-expanded="false">
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+          {# Botão Histórico #}
+          <a href="{{ url_for('assuntos.history', id=a.id) }}" 
+             class="btn btn-sm btn-outline-info" title="Ver">
+            <i class="fas fa-eye"></i>
+          </a>
+          <a href="{{ url_for('assuntos.edit', id=a.id) }}"
+             class="btn btn-sm btn-outline-primary me-1" title="Editar">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </a>
+          <form method="post"
+                action="{{ url_for('assuntos.delete', id=a.id) }}"
+                class="d-inline"
+                onsubmit="return confirm('Excluir este assunto?');">
+            {{ csrf_form.hidden_tag() }}
+            <button class="btn btn-sm btn-outline-danger" title="Excluir">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+
+      {# Collapse de tarefas para este assunto #}
+      <tr class="collapse" id="tasks-{{ a.id }}">
+        <td colspan="5" class="ps-5">
+          <ul class="list-group list-group-flush small">
+            {% set ts = visible_tasks[a.id] %}
+            {% if ts %}
+              {% for t in ts %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                  <!-- bloco esquerdo: título, data, horas e status -->
+                  <div class="d-flex align-items-center gap-3">
+                    <strong>{{ t.title }}</strong>
+                    {% if t.due_date %}
+                      <small class="text-muted">{{ t.due_date.strftime('%d/%m/%Y') }}</small>
+                    {% endif %}
+                    <span>{{ task_hours[t.id]|default(0) }}h</span>
+                    <form method="post"
+                          action="{{ url_for('tarefas.toggle', id=t.id) }}"
+                          class="d-inline">
+                      {{ csrf_form.hidden_tag() }}
+                      <button type="submit"
+                              class="btn btn-sm {% if t.status=='open' %}btn-warning text-dark{% else %}btn-success{% endif %}"
+                              title="Alternar Status">
+                        {{ t.status|capitalize }}
+                      </button>
+                    </form>
+                  </div>
+                  <!-- bloco direito: ações -->
+                  <div class="d-flex align-items-center">
+                    <button class="btn btn-sm btn-outline-secondary me-1"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalHorasTarefa{{ t.id }}"
+                            title="Adicionar Horas">
+                      <i class="fa-solid fa-clock"></i>
+                    </button>
+                    <a href="{{ url_for('tarefas.history', id=a.id) }}" 
+                      class="btn btn-sm btn-outline-info" title="Ver">
+                      <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{{ url_for('tarefas.edit', id=t.id) }}"
+                       class="btn btn-sm btn-outline-primary me-1"
+                       title="Editar Tarefa">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                    </a>
+                    <form method="post"
+                          action="{{ url_for('tarefas.delete', id=t.id) }}"
+                          class="d-inline"
+                          onsubmit="return confirm('Excluir esta tarefa?');">
+                      {{ csrf_form.hidden_tag() }}
+                      <button class="btn btn-sm btn-outline-danger" title="Excluir Tarefa">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </form>
+                  </div>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="list-group-item text-muted">Nenhuma tarefa.</li>
+            {% endif %}
+          </ul>
+          <a href="{{ url_for('tarefas.create', assunto_id=a.id) }}"
+             class="btn btn-primary btn-sm mt-2">
+            <i class="fa-solid fa-plus"></i> Criar Tarefa
+          </a>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="5" class="text-center text-muted">
+          Nenhum assunto encontrado.
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{# Modais de Adicionar Horas (#modalHorasTarefaID) para cada tarefa visível #}
+{% for a in assuntos %}
+  {% set ts = visible_tasks[a.id] %}
+  {% for t in ts %}
+    <div class="modal fade" id="modalHorasTarefa{{ t.id }}" tabindex="-1"
+         aria-labelledby="modalHorasTarefaLabel{{ t.id }}" aria-hidden="true">
+      <div class="modal-dialog modal-sm">
+        <form method="post" action="{{ url_for('tarefas.add_hours', id=t.id) }}">
+          {{ csrf_form.hidden_tag() }}
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalHorasTarefaLabel{{ t.id }}">Adicionar Horas</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label for="horas{{ t.id }}" class="form-label">Horas</label>
+                <input type="number"
+                       name="horas"
+                       id="horas{{ t.id }}"
+                       step="0.25"
+                       class="form-control"
+                       placeholder="0.0"
+                       required>
+              </div>
+              <div class="mb-3">
+                <label for="descricao{{ t.id }}" class="form-label">Descrição (opcional)</label>
+                <textarea name="description"
+                          id="descricao{{ t.id }}"
+                          class="form-control"
+                          placeholder="Descrição do lançamento"></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button"
+                      class="btn btn-secondary btn-sm"
+                      data-bs-dismiss="modal">
+                Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary btn-sm">
+                Salvar
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+{% endfor %}

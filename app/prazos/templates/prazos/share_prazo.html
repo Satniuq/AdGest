@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Compartilhar Prazo{% endblock %}
+{% block content %}
+  <h2>Compartilhar Prazo: {{ prazo.assunto }}</h2>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label }}<br>
+      {{ form.shared_with(class="form-control") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+  </form>
+{% endblock %}

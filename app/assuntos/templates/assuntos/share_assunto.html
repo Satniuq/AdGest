@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Compartilhar Assunto: {{ assunto.title }}{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h1 class="mb-4">Compartilhar Assunto: {{ assunto.title }}</h1>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="mb-3">
+      {{ form.shared_with.label(class="form-label") }}
+      {{ form.shared_with(class="form-select", multiple=true) }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('assuntos.history', id=assunto.id) }}" class="btn btn-secondary">Cancelar</a>
+  </form>
+</div>
+{% endblock %}

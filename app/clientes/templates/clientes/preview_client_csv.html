@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualização de Clientes CSV{% endblock %}
+{% block content %}
+<div class="container my-4">
+  <h2 class="text-center">Pré-visualização de Clientes CSV</h2>
+  
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>Linha</th>
+        <th>Nome</th>
+        <th>Numero Interno</th>
+        <th>NIF</th>
+        <th>Endereço</th>
+        <th>Email</th>
+        <th>Telefone</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in registros %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ row.get('client') or row.get('cliente') or row.get('name') or row.get('nome') }}</td>
+        <td>{{ row.get('number_interno') or row.get('numero_interno') or row.get('numero') }}</td>
+        <td>{{ row.get('nif') }}</td>
+        <td>{{ row.get('endereço') or row.get('morada') or row.get('address') or row.get('endereco') }}</td>
+        <td>{{ row.get('email') }}</td>
+        <td>{{ row.get('telefone') or row.get('telephone') or row.get('tel') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  
+  <div class="d-flex justify-content-end gap-2 mt-4">
+    <a href="{{ url_for('client.upload_client_csv') }}" class="btn btn-secondary">Cancelar</a>
+    <!-- Botão de confirmação que envia um POST -->
+    <form method="POST" action="{{ url_for('client.import_confirm') }}">
+      {{ form.hidden_tag() }}
+      <button type="submit" class="btn btn-primary">Confirmar Importação</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

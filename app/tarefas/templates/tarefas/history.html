@@ -1,0 +1,306 @@
+{# app/tarefas/templates/tarefas/history.html #}
+{% extends 'base.html' %}
+{% block title %}Tarefa #{{ tarefa.id }} – {{ tarefa.title }}{% endblock %}
+
+{% block content %}
+<style>
+  .card .table th,
+  .card .table td {
+    font-size: .85rem;
+    padding: .25rem .5rem;
+  }
+  .scrollable-table {
+    max-height: 250px;
+    overflow-y: auto;
+  }
+</style>
+
+<script>
+  // endpoint idêntico ao Prazos: /<id>/bill
+  const billHistoryUrl = "{{ url_for('tarefas.bill_history', id=tarefa.id) }}";
+  const csrfToken      = "{{ csrf_token() }}";
+</script>
+
+<div class="container-fluid py-4">
+  {# — Barra Superior — #}
+  <div class="bg-light rounded p-3 mb-4">
+    <div class="d-flex flex-wrap align-items-center">
+      <div class="me-4"><strong>Tarefa #{{ tarefa.id }}</strong></div>
+      <div class="me-4"><strong>Assunto:</strong>
+        <a href="{{ url_for('assuntos.history', id=assunto.id) }}">{{ assunto.title }}</a>
+      </div>
+      <div class="me-4"><strong>Cliente:</strong> {{ assunto.client.name }}</div>
+      <div class="me-4"><strong>Vencimento:</strong>
+        {{ tarefa.due_date.strftime('%d/%m/%Y') if tarefa.due_date else '—' }}
+      </div>
+      <div class="me-4"><strong>Status:</strong> {{ tarefa.status|capitalize }}</div>
+      <div class="me-4"><strong>Histórico:</strong>
+        <span id="totalHours">{{ '%.1f'|format(total_hours) }}</span>h
+      </div>
+      <div class="me-4"><strong>Faturado:</strong>
+        <span id="billedHours">{{ '%.1f'|format(billed_hours) }}</span>h
+      </div>
+      <div class="me-4"><strong>Pendente:</strong>
+        <span id="pendingHours">{{ '%.1f'|format(pending_hours) }}</span>h
+      </div>
+      <div><strong>Estimativa:</strong> {{ '%.1f'|format(tarefa.hours_estimate or 0) }}h</div>
+    </div>
+  </div>
+
+  <div class="row gx-4">
+    {# — Coluna Esquerda: Notas — #}
+    <div class="col-lg-6">
+      <div class="card mb-4">
+        <div class="card-header py-2">Notas da Tarefa</div>
+        <div class="card-body p-3">
+          <form method="post" action="{{ url_for('tarefas.history', id=tarefa.id) }}">
+            {{ note_form.hidden_tag() }}
+            {{ note_form.content(class_='form-control mb-2', rows=2, placeholder='Nova nota…') }}
+            {{ note_form.submit(class_='btn btn-primary btn-sm') }}
+          </form>
+        </div>
+        {% if notes %}
+        <div class="card-body p-0 scrollable-table">
+          <ul class="list-group list-group-flush mb-0">
+            {% for note in notes %}
+            <li class="list-group-item py-2 small">
+              <span class="text-muted">{{ note.created_at.strftime('%d/%m %H:%M') }}</span>
+              — {{ note.user.nickname }}<br>
+              {{ note.content }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="card-body text-center text-muted py-4">Nenhuma nota.</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# — Coluna Direita: Horas & Para Billing — #}
+    <div class="col-lg-6">
+      <div class="card mb-4">
+        <div class="card-header py-2">Horas</div>
+        <div class="card-body p-3">
+          <!-- Totais no cabeçalho -->
+          <div class="row mb-3">
+            <div class="col-6 text-center">
+              <strong>Histórico:</strong> {{ '%.1f'|format(total_hours) }}h
+            </div>
+            <div class="col-6 text-center">
+              <strong>Para Billing:</strong> {{ '%.1f'|format(billed_hours) }}h
+            </div>
+          </div>
+
+          <div class="row gx-0">
+            {# Histórico de Adições #}
+            <div class="col-6 pe-1">
+              <div class="scrollable-table mb-2">
+                <table class="table table-sm mb-0">
+                  <thead class="table-light">
+                    <tr><th>Data/Hora</th><th>Quem / Horas</th><th></th></tr>
+                  </thead>
+                  <tbody>
+                    {% set billed_ids = billed_history_ids %}
+                    {% for h in history %}
+                    <tr data-history-id="{{ h.id }}">
+                      <td>{{ h.changed_at.strftime('%d/%m %H:%M') }}</td>
+                      <td>
+                        {% if h.added_hours and h.added_hours > 0 %}
+                          {{ h.user.nickname }} – {{ '%.1f'|format(h.added_hours) }}h
+                          {% if h.detail %}
+                            <br><small class="text-muted">{{ h.detail }}</small>
+                          {% endif %}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                      <td class="text-center">
+                        {% if h.added_hours and h.id in billed_ids %}
+                          <i class="fa-solid fa-check text-success" title="Já enviado ao Billing"></i>
+                        {% elif h.added_hours %}
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary btn-add-bill"
+                                  data-history-id="{{ h.id }}">
+                            ▶
+                          </button>
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                    {% if history|length == 0 %}
+                    <tr>
+                      <td colspan="3" class="text-center text-muted">Sem lançamentos</td>
+                    </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button"
+                      class="btn btn-sm btn-outline-secondary w-100"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalAddHours">
+                <i class="fa-solid fa-clock-plus"></i> Adicionar Horas
+              </button>
+
+            </div>
+
+            {# Painel de Billing #}
+            <div class="col-6 ps-1">
+              <div class="scrollable-table mb-2">
+                <table class="table table-sm mb-0">
+                  <thead class="table-light">
+                    <tr><th>Data/Hora</th><th>Quem / Horas</th><th></th></tr>
+                  </thead>
+                  <tbody id="billingTableBody">
+                    {% for item in billing_items %}
+                    <tr data-history-id="{{ item.history_id }}">
+                      <td>{{ item.created_at.strftime('%d/%m %H:%M') }}</td>
+                      <td>
+                        {{ item.user.nickname }} – {{ '%.1f'|format(item.hours) }}h
+                        {% if item.description %}
+                          <br><small class="text-muted">{{ item.description }}</small>
+                        {% endif %}
+                      </td>
+                      <td></td>
+                    </tr>
+                    {% endfor %}
+                    {% if billing_items|length == 0 %}
+                    <tr>
+                      <td colspan="3" class="text-center text-muted">Nenhum item de billing.</td>
+                    </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# Gerar Nota de Honorários #}
+          <form method="post"
+                action="{{ url_for('tarefas.gerar_nota', id=tarefa.id) }}"
+                class="mt-3">
+            {{ nota_form.hidden_tag() }}
+            <button type="submit"
+                    class="btn btn-sm btn-outline-primary w-100">
+              <i class="fa-solid fa-file-invoice"></i>
+              Gerar Nota de Honorários
+            </button>
+          </form>
+
+          {# Listagem das Notas de Honorários #}
+          <div class="mt-4">
+            <h5>Notas de Honorários</h5>
+            {% if tarefa.notas_honorarios %}
+            <ul class="list-group">
+              {% for nota in tarefa.notas_honorarios %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  {% if nota.billing %}
+                    <strong>#{{ nota.billing.id }}</strong>
+                  {% else %}
+                    <strong>#{{ nota.id }}</strong>  {# fallback, não deverá ocorrer #}
+                  {% endif %}
+                  – {{ nota.created_at.strftime('%d/%m/%Y %H:%M') }}
+                  por {{ nota.creator.nickname }}
+                </div>
+                <div class="d-flex align-items-center">
+                  <span class="badge bg-secondary rounded-pill me-2">
+                    {{ '%.2f'|format(nota.total_hours) }}h
+                  </span>
+                  <a href="{{ url_for('billing.view_nota', nota_id=nota.billing.id) }}"
+                    class="btn btn-sm btn-link">Ver detalhe</a>
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted">Nenhuma nota de honorários gerada.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{# — Modal de Adicionar Horas — #}
+<div class="modal fade" id="modalAddHours" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <form method="post"
+          action="{{ url_for('tarefas.add_hours', id=tarefa.id) }}">
+      {{ add_hours_form.hidden_tag() }}
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Adicionar Horas</h5>
+          <button type="button" class="btn-close"
+                  data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            {{ add_hours_form.horas(class_='form-control', placeholder='Horas (ex: 1.5)') }}
+          </div>
+          <div class="mb-3">
+            {{ add_hours_form.description(class_='form-control', placeholder='Descrição (opcional)') }}
+          </div>
+        </div>
+        <div class="modal-footer">
+          {{ add_hours_form.submit(class_='btn btn-primary w-100') }}
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.btn-add-bill').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const hid = btn.dataset.historyId;
+    fetch(billHistoryUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        history_id: hid,
+        csrf_token: csrfToken
+      })
+    })
+    .then(r => {
+      if (!r.ok) throw new Error('Status ' + r.status);
+      return r.text();
+    })
+    .then(() => {
+      const icon = document.createElement('i');
+      icon.className = 'fa-solid fa-check text-success';
+      icon.title = 'Já faturado';
+      btn.replaceWith(icon);
+
+      const tr = document.querySelector(`tr[data-history-id="${hid}"]`);
+      const [dtCol, hrsCol] = tr.querySelectorAll('td');
+      const row = document.createElement('tr');
+      row.dataset.historyId = hid;
+      row.innerHTML = `
+        <td>${dtCol.innerText}</td>
+        <td>${hrsCol.innerText}</td>
+        <td></td>`;
+      const tb = document.getElementById('billingTableBody');
+      if (tb.querySelector('.text-muted')) tb.innerHTML = '';
+      tb.appendChild(row);
+
+      const total = parseFloat(document.getElementById('totalHours').textContent);
+      const billed = parseFloat(document.getElementById('billedHours').textContent);
+      const delta  = parseFloat(hrsCol.innerText);
+      const nb     = billed + delta;
+      document.getElementById('billedHours').textContent  = nb.toFixed(1);
+      document.getElementById('pendingHours').textContent = Math.max(0, total - nb).toFixed(1);
+    })
+    .catch(err => {
+      console.error(err);
+      alert('Erro ao enviar ao billing.');
+    });
+  });
+});
+</script>
+{% endblock %}

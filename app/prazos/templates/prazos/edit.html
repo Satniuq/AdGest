@@ -1,0 +1,104 @@
+{# app/prazos/templates/edit.html #}
+{% extends 'base.html' %}
+{% block title %}Editar Prazo – Processo {{ processo.external_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h1 class="h3 mb-4">Editar Prazo para Processo {{ processo.external_id }}</h1>
+
+  <form method="post" novalidate>
+    {{ form.hidden_tag() }}
+
+    {# Processo (readonly) #}
+    <div class="mb-3">
+      <label class="form-label">Processo</label>
+      <input type="text"
+             class="form-control"
+             value="{{ processo.external_id }}"
+             readonly>
+    </div>
+
+    <div class="row g-3">
+      {# Cliente #}
+      <div class="col-md-6">
+        {{ form.client.label(class_='form-label') }}
+        {{ form.client(class_='form-select select2', **{'data-live-search':'true'}) }}
+        {% for err in form.client.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Tipo de Prazo #}
+      <div class="col-md-4">
+        {{ form.deadline_type.label(class_='form-label') }}
+        {{ form.deadline_type(class_='form-select') }}
+        {% for err in form.deadline_type.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Recorrência #}
+      <div class="col-md-4">
+        {{ form.recurrence_rule.label(class_='form-label') }}
+        {{ form.recurrence_rule(class_='form-select') }}
+        {% for err in form.recurrence_rule.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Data Limite #}
+      <div class="col-md-4">
+        {{ form.date.label(class_='form-label') }}
+        {{ form.date(class_='form-control', type='date') }}
+        {% for err in form.date.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Descrição #}
+      <div class="col-12">
+        {{ form.description.label(class_='form-label') }}
+        {{ form.description(class_='form-control', placeholder='Descrição sucinta do prazo') }}
+        {% for err in form.description.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Comentários #}
+      <div class="col-12">
+        {{ form.comments.label(class_='form-label') }}
+        {{ form.comments(class_='form-control', placeholder='Observações adicionais (opcional)') }}
+        {% for err in form.comments.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Horas Gastas #}
+      <div class="col-md-4">
+        {{ form.hours_spent.label(class_='form-label') }}
+        {{ form.hours_spent(class_='form-control', step='0.1') }}
+        {% for err in form.hours_spent.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
+      {# Status #}
+      <div class="col-md-4">
+        {{ form.status.label(class_='form-label') }}
+        {{ form.status(class_='form-select') }}
+        {% for err in form.status.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-4">
+      {{ form.submit(class_='btn btn-primary') }}
+      <a href="{{ url_for('processos.detail_process', processo_id=processo.id) }}"
+         class="btn btn-secondary ms-2">
+        <i class="fa-solid fa-arrow-left me-1"></i>Cancelar
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

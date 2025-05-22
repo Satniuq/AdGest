@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Contabilidade{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+  <!-- Cabeçalho com Título e Botões -->
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="m-0">Contabilidade</h2>
+    <div>
+      <!-- Botão Inserir -->
+      <button class="btn btn-outline-primary me-2"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapseInserir">
+        Inserir
+      </button>
+      <!-- Botão CSV -->
+      <form method="POST"
+            action="{{ url_for('accounting.upload_csv') }}"
+            enctype="multipart/form-data"
+            class="d-inline-block">
+        {{ upload_form.csrf_token }}
+        {{ upload_form.csv_file(id="arquivo", class="d-none", onchange="this.form.submit()") }}
+        <label for="arquivo" class="btn btn-outline-primary me-2 mb-0">
+          CSV
+        </label>
+      </form>
+      <!-- Botão Relatórios -->
+      <a href="{{ url_for('accounting.relatorio_contabilidade', **request.args) }}"
+         class="btn btn-outline-secondary">
+        Relatórios
+      </a>
+    </div>
+  </div>
+
+  <!-- Inserir Fatura (colapsável) -->
+  <div class="collapse mb-3" id="collapseInserir">
+    {# Alias invoice_form to form so the partial still references form.xxx #}
+    {% set form = invoice_form %}
+    {% include "accounting/_inserir_invoice.html" %}
+    {% set form = none %}
+  </div>
+
+  <!-- Filtros -->
+  <form method="get"
+        action="{{ url_for('accounting.manage_invoices') }}"
+        class="row gx-2 gy-2 align-items-end mb-3">
+    <div class="col-md-2">
+      <label for="tipo" class="form-label">Tipo</label>
+      <select name="tipo" id="tipo" class="form-select">
+        <option value="">Todos</option>
+        {% for val,label in invoice_form.tipo.choices %}
+          <option value="{{ val }}" {% if filters.tipo==val %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label for="data_emissao" class="form-label">Data Emissão</label>
+      <input type="date"
+             name="data_emissao"
+             id="data_emissao"
+             value="{{ filters.data_emissao or '' }}"
+             class="form-control">
+    </div>
+    <div class="col-md-2">
+      <label for="advogado" class="form-label">Advogado</label>
+      <input type="text"
+             name="advogado"
+             id="advogado"
+             value="{{ filters.advogado or '' }}"
+             class="form-control"
+             placeholder="Advogado">
+    </div>
+    <div class="col-md-2">
+      <label for="cliente" class="form-label">Cliente</label>
+      <input type="text"
+             name="cliente"
+             id="cliente"
+             value="{{ filters.cliente_nome or '' }}"
+             class="form-control"
+             placeholder="Cliente">
+    </div>
+    <div class="col-md-2">
+      <label for="status" class="form-label">Status</label>
+      <select name="status" id="status" class="form-select">
+        <option value="">Todos</option>
+        {% for val,label in invoice_form.status.choices %}
+          <option value="{{ val }}" {% if filters.status==val %}selected{% endif %}>
+            {{ label }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button type="submit" class="btn btn-primary">Filtrar</button>
+    </div>
+  </form>
+
+{# Cria o dicionário de labels #}
+{%- set tipo_labels   = dict(invoice_form.tipo.choices) -%}
+{%- set status_labels = dict(invoice_form.status.choices) -%}
+
+{# Tabela de Faturas #}
+<div class="table-responsive">
+  <table class="table table-bordered table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Cliente</th>
+        <th>Doc</th>
+        <th>Tipo</th>
+        <th>Recibo</th>
+        <th>Emissão</th>
+        <th>Adv</th>
+        <th>Valor</th>
+        <th>Mora</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inv in invoices %}
+        <tr class="{% if inv.status_cobranca.value != 'paga' %}table-danger{% endif %}">
+          <td>{{ inv.client.name }}</td>
+          <td>{{ inv.numero or inv.id }}</td>
+          <td>{{ tipo_labels[inv.tipo.value] }}</td>
+          <td>{{ inv.numero_recibo or '–' }}</td>
+          <td>{{ inv.data_emissao.strftime('%d/%m/%Y') if inv.data_emissao else 'N/A' }}</td>
+          <td>{{ inv.advogado or '-' }}</td>
+          <td>{{ "%.2f"|format(inv.valor) }} €</td>
+          <td>{{ inv.dias_atraso }}</td>
+          <td class="text-nowrap">
+            {# Botão “Ver Contabilidade do Cliente” #}
+            <a href="{{ url_for('accounting.contabilidade_cliente', client_id=inv.client.id) }}"
+               class="btn btn-sm btn-outline-info" title="Ver">
+              <i class="fas fa-eye"></i>
+            </a>
+            {# Botão “Editar #}
+            <a href="{{ url_for('accounting.edit_documento', doc_id=inv.id) }}"
+               class="btn btn-sm btn-outline-primary" title="Editar">
+              <i class="fas fa-pen"></i>
+            </a>
+
+            {# Botão de Status #}
+            {% set current = inv.status_cobranca.value %}
+            {% set label   = status_labels[current] %}
+
+            {% if current == 'paga' %}
+              {% set btn_class = 'btn-success' %}
+            {% elif current == 'pendente' %}
+              {% set btn_class = 'btn-danger' %}
+            {% else %}
+              {% set btn_class = 'btn-secondary' %}
+            {% endif %}
+
+            <button class="btn btn-sm {{ btn_class }}"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalStatus{{ inv.id }}">
+              {{ label }}
+            </button>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# Modais de Alterar Status – fora da tabela #}
+{% for inv in invoices %}
+  <div class="modal fade" id="modalStatus{{ inv.id }}" tabindex="-1"
+       aria-labelledby="modalStatusLabel{{ inv.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="POST"
+              action="{{ url_for('accounting.alterar_status_documento', doc_id=inv.id) }}">
+          {{ invoice_form.csrf_token }}
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalStatusLabel{{ inv.id }}">
+              Alterar Status: {{ inv.numero or inv.id }}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label" for="status_{{ inv.id }}">Novo Status</label>
+              <select name="status" id="status_{{ inv.id }}" class="form-select">
+                {% for val,label in invoice_form.status.choices %}
+                  <option value="{{ val }}" {% if val==inv.status_cobranca %}selected{% endif %}>
+                    {{ label }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="numeroRecibo{{ inv.id }}">
+                Nº Recibo / NC (opcional)
+              </label>
+              <input type="text"
+                     name="numero_recibo"
+                     id="numeroRecibo{{ inv.id }}"
+                     class="form-control"
+                     placeholder="Ex: Recibo #1234">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+
+  <!-- Paginação -->
+  {% if pagination.pages > 1 %}
+    <nav aria-label="Paginação">
+      <ul class="pagination justify-content-center">
+        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('accounting.manage_invoices', page=pagination.prev_num, **request.args) }}">
+            « Anterior
+          </a>
+        </li>
+        {% for p in pagination.iter_pages(left_edge=2, right_edge=2, left_current=2, right_current=2) %}
+          {% if p %}
+            <li class="page-item {% if p==pagination.page %}active{% endif %}">
+              <a class="page-link"
+                 href="{{ url_for('accounting.manage_invoices', page=p, **request.args) }}">
+                {{ p }}
+              </a>
+            </li>
+          {% else %}
+            <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+          <a class="page-link"
+             href="{{ url_for('accounting.manage_invoices', page=pagination.next_num, **request.args) }}">
+            Próximo »  
+          </a>
+        </li>
+      </ul>
+    </nav>
+  {% endif %}
+
+</div>
+{% endblock %}

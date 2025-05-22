@@ -1,0 +1,22 @@
+{# app/dashboard/templates/dashboard/sortable_script.html #}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    var lists = document.querySelectorAll('.sortable-list');
+    lists.forEach(function(list) {
+      Sortable.create(list, {
+        animation: 150,
+        onEnd: function(evt) {
+          // Exemplo: enviar nova ordem por AJAX
+          var order = Array.from(list.children).map(function(item) {
+            return item.dataset.itemId;
+          });
+          fetch('{{ url_for("dashboard.update_order") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({order: order})
+          });
+        }
+      });
+    });
+  });
+</script>

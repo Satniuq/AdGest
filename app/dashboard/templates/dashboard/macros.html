@@ -1,0 +1,130 @@
+{# due_block #}
+{% macro due_block(title, a, tasks_map, task_hours, assunto_hours) %}
+  <div class="card mb-3">
+    <div class="card-header p-2">
+      <button class="btn btn-sm btn-light w-100 text-start" type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapse-{{ title|lower }}">
+        {{ title }} <i class="fa-solid fa-angle-down float-end"></i>
+      </button>
+    </div>
+    <div id="collapse-{{ title|lower }}" class="collapse">
+      <div class="card-body" style="max-height:220px; overflow-y:auto;">
+        {% set any = false %}
+        {% for a in assuntos %}
+          {% set ts = tasks_map.get(a.id, []) %}
+          {% set due = ts | selectattr('due_date', 'defined') | selectattr('status','equalto','open') | list %}
+          {% if due %}
+            {% set any = true %}
+            <h6 class="mt-2 mb-1">{{ a.title }}</h6>
+            <ul class="list-unstyled ps-3">
+              {% for t in due %}
+                <li class="mb-1">
+                  <i class="fa-solid fa-circle-small me-1"></i>
+                  <strong>{{ t.title }}</strong>
+                  <small class="text-muted ms-2">{{ t.due_date.strftime('%d/%m/%Y') }}</small>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endfor %}
+        {% if not any %}
+          <small class="text-muted">Nenhuma tarefa neste período.</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
+{# assunto_card #}
+{% macro assunto_card(a, tasks_map, task_hours, assunto_hours) %}
+  <div class="col" data-id="{{ a.id }}">
+    <div class="card h-100">
+      <div class="card-header">
+        <h5 class="mb-0">{{ a.title }}</h5>
+        <div class="float-end">
+          <span class="badge bg-info">{{ assunto_hours[a.id] }}h</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="mb-2">
+          <strong>Cliente:</strong> {{ a.client.name }} |
+          <strong>Data:</strong> {{ a.due_date.strftime('%d/%m/%Y') if a.due_date else '—' }}
+        </p>
+        <button class="btn btn-primary mb-2" type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#tarefas-{{ a.id }}">
+          <i class="fa-solid fa-eye"></i> Tarefas
+        </button>
+        <div class="collapse" id="tarefas-{{ a.id }}">
+          {% set ts = tasks_map.get(a.id, []) %}
+          {% set pend = ts | selectattr('status','equalto','open') | list %}
+          {% if pend %}
+            <h6>Pendentes</h6>
+            <ul class="list-group mb-3">
+              {% for t in pend %}
+                <li class="list-group-item d-flex justify-content-between">
+                  <div>
+                    <strong>{{ t.title }}</strong>
+                    {% if t.due_date %}<small class="text-muted ms-2">{{ t.due_date.strftime('%d/%m/%Y') }}</small>{% endif %}
+                  </div>
+                  <div class="d-flex gap-1">
+                    <form action="{{ url_for('tarefas.toggle', id=t.id) }}" method="post">
+                      <button class="btn btn-sm btn-success"><i class="fa-solid fa-check"></i></button>
+                    </form>
+                    <button class="btn btn-sm btn-outline-secondary add-hours-tarefa"
+                            data-tarefa-id="{{ t.id }}">
+                      <i class="fa-solid fa-clock"></i> {{ task_hours[t.id] }}h
+                    </button>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          <a href="{{ url_for('tarefas.create', assunto_id=a.id) }}" class="btn btn-primary btn-sm">
+            <i class="fa-solid fa-plus"></i> Criar Tarefa
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro shared_dropdown(obj) %}
+  <div class="btn-group">
+    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle"
+            data-bs-toggle="dropdown" aria-expanded="false">
+      <i class="fa-solid fa-share-nodes"></i>
+    </button>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item"
+          href="{{ url_for('assuntos.share', id=obj.id) }}">
+          Compartilhar
+        </a>
+      </li>
+    </ul>
+  </div>
+{% endmacro %}
+
+{% macro history_dropdown(obj) %}
+  {# Descobre dinamicamente o nome do blueprint (assuntos, tarefas…) #}
+  {% set blueprint = obj.__class__.__name__.lower() + 's' %}
+  <div class="btn-group">
+    <button type="button"
+            class="btn btn-sm btn-outline-secondary dropdown-toggle"
+            data-bs-toggle="dropdown"
+            aria-expanded="false">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+    </button>
+    <ul class="dropdown-menu">
+      <li>
+        <a class="dropdown-item"
+           href="{{ url_for(blueprint + '.history', id=obj.id) }}">
+          Histórico
+        </a>
+      </li>
+    </ul>
+  </div>
+{% endmacro %}
+

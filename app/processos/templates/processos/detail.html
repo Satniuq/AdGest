@@ -1,0 +1,263 @@
+{% extends 'base.html' %}
+{% block title %}Processo {{ processo.external_id or processo.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row gx-4">
+
+    {# === Coluna esquerda: Resumo, Compartilhamento e Notas === #}
+    <div class="col-md-4">
+      {# Card com resumo e compartilhamento #}
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">{{ processo.external_id or processo.id }}</h5>
+          <a href="{{ url_for('processos.share_process', processo_id=processo.id) }}"
+             class="btn btn-outline-secondary btn-sm">
+            Compartilhar
+          </a>
+        </div>
+        <div class="card-body p-3">
+          <p class="mb-1 text-muted small">
+            {{ processo.client.name }} &mdash; {{ processo.case_type.name }}
+          </p>
+          <p class="mb-2 small">
+            Status: {{ processo.status|capitalize }}
+            {% if processo.closed_at %}
+              | Fechado em {{ processo.closed_at.strftime('%d/%m/%Y') }}
+            {% else %}
+              | Aberto em {{ processo.opened_at.strftime('%d/%m/%Y') }}
+            {% endif %}
+          </p>
+
+          <hr>
+          <p class="mb-1"><strong>Compartilhado com:</strong> 
+            {% if processo.shared_with.count() %}
+              {% for user in processo.shared_with %}
+                {{ user.nickname }}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+            {% else %}
+              <em>Ninguém</em>
+            {% endif %}
+          </p>
+          <p class="mb-0"><strong>Compartilhado por:</strong> 
+            {% if last_share %}
+              {{ last_share.changed_by_user.nickname }} em {{ last_share.changed_at.strftime('%d/%m/%Y %H:%M') }}
+            {% else %}
+              <em>—</em>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      {# Nova Nota #}
+      <div class="card mb-4">
+        <div class="card-header py-2">Nova Nota</div>
+        <div class="card-body p-3">
+          <form method="post"
+                action="{{ url_for('processos.detail_process', processo_id=processo.id) }}">
+            {{ add_note_form.hidden_tag() }}
+            {{ add_note_form.content(class_='form-control', rows=4, placeholder='Digite sua nota…') }}
+            {{ add_note_form.submit(class_='btn btn-primary btn-sm mt-2') }}
+          </form>
+        </div>
+      </div>
+
+      {# Histórico de Notas #}
+      {% if notes %}
+      <div class="card mb-4">
+        <div class="card-header py-2">Notas Recentes</div>
+        <div class="card-body p-0 scrollable-notes" style="max-height:300px;">
+          <ul class="list-group list-group-flush mb-0">
+            {% for note in notes %}
+            <li class="list-group-item py-2 small">
+              <span class="text-muted">{{ note.created_at.strftime('%d/%m %H:%M') }}</span>
+              {{ note.content }}
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# === Coluna direita: Prazos Associados e Histórico Geral === #}
+    <div class="col-md-8">
+      <h5 class="mb-3">Prazos Associados</h5>
+      
+      {# Abas Pendentes / Concluídos #}
+      <ul class="nav nav-tabs mb-3" role="tablist">
+        <div class="d-flex justify-content-end mb-2">
+          <a href="{{ url_for('prazos.create_for_processo', processo_id=processo.id) }}" class="btn btn-success">
+            <i class="fa-solid fa-plus"></i> Novo Prazo
+          </a>
+        </div>
+
+        <li class="nav-item">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-pendentes">
+            Pendentes
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-concluidos">
+            Concluídos
+          </button>
+        </li>
+      </ul>
+
+      <div class="tab-content mb-4">
+        {% for status_tab, pane_id in [('open','pendentes'),('closed','concluidos')] %}
+        <div class="tab-pane fade {% if status_tab=='open' %}show active{% endif %}"
+             id="tab-{{ pane_id }}" role="tabpanel">
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Tipo</th>
+                  <th>Descrição</th>
+                  <th>Data</th>
+                  <th class="text-center">Horas</th>
+                  <th class="text-center">Faturado</th>
+                  <th class="text-center">Pendente</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set found = false %}
+                {% for p in prazos %}
+                  {% if p.status == status_tab %}
+                    {% set found = true %}
+                    {% set billed = p.billing_items.all()|map(attribute='hours')|sum %}
+                    {% set spent  = p.hours_spent or 0 %}
+                    {% set pend   = (spent - billed) if (spent - billed)>0 else 0 %}
+                    <tr>
+                      <td>{{ p.type.name }}</td>
+                      <td>{{ p.description }}</td>
+                      <td>{{ p.date.strftime('%d/%m/%Y') }}</td>
+                      <td class="text-center">{{ '%.1f'|format(spent) }}</td>
+                      <td class="text-center">{{ '%.1f'|format(billed) }}</td>
+                      <td class="text-center">{{ '%.1f'|format(pend) }}</td>
+                      <td class="text-end">
+                        {# Botão Ver #}
+                        <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                           class="btn btn-sm btn-outline-info me-1" title="Ver Prazo">
+                          <i class="fas fa-eye"></i>
+                        </a>
+                        {# Botão Editar #}
+                        <a href="{{ url_for('prazos.edit_prazo', prazo_id=p.id) }}"
+                           class="btn btn-sm btn-outline-primary me-1" title="Editar Prazo">
+                          <i class="fas fa-pen"></i>
+                        </a>
+                        {# Botão Excluir #}
+                        <form method="post"
+                              action="{{ url_for('prazos.delete_prazo', prazo_id=p.id) }}"
+                              class="d-inline"
+                              onsubmit="return confirm('Excluir este prazo?');">
+                          {{ add_hours_form.hidden_tag() }}
+                          <button type="submit"
+                                  class="btn btn-sm btn-outline-danger me-1"
+                                  title="Excluir Prazo">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                        </form>
+                        {# Botão Adicionar Horas #}
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalHoras{{ p.id }}"
+                                title="Adicionar Horas">
+                          <i class="fas fa-clock"></i>
+                        </button>
+                      </td>
+                    </tr>
+      
+                    {# — Modal de Adicionar Horas para este prazo — #}
+                    <div class="modal fade" id="modalHoras{{ p.id }}" tabindex="-1">
+                      <div class="modal-dialog modal-sm">
+                        <form method="post"
+                              action="{{ url_for('processos.detail_process', processo_id=processo.id) }}">
+                          {{ add_hours_form.hidden_tag() }}
+                          <input type="hidden" name="prazo_id" value="{{ p.id }}">
+                          <div class="modal-content">
+                            <div class="modal-header">
+                              <h5 class="modal-title">Adicionar Horas – Prazo #{{ p.id }}</h5>
+                              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                              {{ add_hours_form.hours(class_='form-control', id='hours'~p.id) }}
+                            </div>
+                            <div class="modal-footer">
+                              {{ add_hours_form.submit(class_='btn btn-primary') }}
+                            </div>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  {% endif %}
+                {% endfor %}
+                {% if not found %}
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">
+                      Nenhum prazo {{ pane_id }}.
+                    </td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      
+
+      {# Histórico de Horas dos Prazos – Card colapsável estilizado #}
+      <div class="card mb-4">
+        <div id="headingHistorico"
+            class="card-header py-2 bg-secondary text-white d-flex justify-content-between align-items-center"
+            style="cursor: pointer;"
+            data-bs-toggle="collapse"
+            data-bs-target="#collapseHistorico"
+            aria-expanded="false"
+            aria-controls="collapseHistorico">
+          <span class="fw-bold mb-0">Histórico de Horas dos Prazos</span>
+          <i class="fas fa-angle-down"></i>
+        </div>
+        <div id="collapseHistorico" class="collapse" aria-labelledby="headingHistorico">
+          <div class="card-body p-0 scrollable-notes" style="max-height: 300px;">
+            {% set any = false %}
+            {% for pr in process_prazos %}
+              {% if horas_history[pr.id] %}
+                {% set any = true %}
+                <h6 class="px-3 pt-3 pb-1 mb-0">
+                  Prazo #{{ pr.id }} – {{ pr.type.name }}
+                  {% if pr.status=='open' %}(Pendente){% else %}(Concluído){% endif %}
+                </h6>
+                <ul class="list-group list-group-flush small mb-2">
+                  {% for h in horas_history[pr.id] %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                      <div>
+                        <span class="text-muted">{{ h.changed_at.strftime('%d/%m %H:%M') }}</span>
+                        – {{ h.detail }}
+                      </div>
+                      {% if h.id in billed_history_ids %}
+                        <span class="badge bg-success">Faturado</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Pendente</span>
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            {% endfor %}
+            {% if not any %}
+              <div class="text-center text-muted py-4">
+                Nenhum registro de horas encontrado.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>
+{% endblock %}

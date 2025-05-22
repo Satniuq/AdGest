@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Compartilhar Processo #{{ processo.id }}</h1>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="form-group">
+      {{ form.users.label }}<br>
+      {{ form.users(class="form-control", multiple="multiple") }}
+    </div>
+    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+    <a href="{{ url_for('processos.detail_process', processo_id=processo.id) }}"
+       class="btn btn-secondary">Cancelar</a>
+  </form>
+{% endblock %}

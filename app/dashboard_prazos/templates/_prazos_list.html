@@ -1,0 +1,120 @@
+{# app/prazos/templates/prazos/_list.html #}
+
+<table class="table table-hover table-striped align-middle">
+  <thead class="table-light">
+    <tr>
+      <th>Data</th>
+      <th>Tipo</th>
+      <th>Processo</th>
+      <th>Cliente</th>
+      <th>Descrição</th>
+      <th>Horas</th>
+      <th>Status</th>
+      <th class="text-end">Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in prazos %}
+      <tr>
+        <td>{{ p.date.strftime('%d/%m/%Y') }}</td>
+        <td>{{ p.type.name }}</td>
+        <td>
+          <a href="{{ url_for('processos.detail_process', processo_id=p.processo.id) }}">
+            {{ p.processo.external_id or p.processo.id }}
+          </a>
+        </td>
+        <td>{{ p.client.name }}</td>
+        <td>
+          <span title="{{ p.description }}">{{ p.description|truncate(30) }}</span>
+        </td>
+        <td class="text-center">{{ '%.1f'|format(p.hours_spent or 0) }}</td>
+        <td class="text-center">
+          <form method="post"
+                action="{{ url_for('prazos.toggle_prazo_status', prazo_id=p.id) }}"
+                class="d-inline">
+            {{ csrf_form.csrf_token }}
+            <button type="submit"
+                    class="btn btn-sm {% if p.status=='open' %}btn-warning text-dark{% else %}btn-success{% endif %}"
+                    title="Clique para alternar status">
+              {{ p.status|capitalize }}
+            </button>
+          </form>
+        </td>
+        <td class="text-end">
+          {# Botão para abrir modal de adicionar horas #}
+          <button class="btn btn-sm btn-outline-secondary me-1"
+                  data-bs-toggle="modal"
+                  data-bs-target="#modalHoras{{ p.id }}">
+            <i class="fas fa-clock"></i>
+          </button>
+
+          {# Botões Ver / Editar / Excluir #}
+          <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+             class="btn btn-sm btn-outline-info" title="Ver">
+            <i class="fas fa-eye"></i>
+          </a>
+          <a href="{{ url_for('prazos.edit_prazo', prazo_id=p.id) }}"
+             class="btn btn-sm btn-outline-primary" title="Editar">
+            <i class="fas fa-pen"></i>
+          </a>
+          <form action="{{ url_for('prazos.delete_prazo', prazo_id=p.id) }}"
+                method="post"
+                class="d-inline"
+                onsubmit="return confirm('Excluir este prazo?');">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+              <i class="fas fa-trash"></i>
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="8" class="text-center text-muted">Nenhum prazo encontrado.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{# ─── Coloque todos os modais **fora** da tabela ─── #}
+{% for p in prazos %}
+  <div class="modal fade" id="modalHoras{{ p.id }}" tabindex="-1"
+       aria-labelledby="modalHorasLabel{{ p.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <form method="post"
+            action="{{ url_for('prazos.add_hours', prazo_id=p.id) }}"
+            class="modal-content">
+        {{ add_hours_form.hidden_tag() }}
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalHorasLabel{{ p.id }}">Adicionar Horas</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="hours{{ p.id }}" class="form-label">Horas (ex: 1.5)</label>
+            {{ add_hours_form.hours(
+                 class_='form-control',
+                 id='hours'~p.id,
+                 placeholder='Horas (ex: 1.5)') }}
+          </div>
+          <div class="mb-3">
+            <label for="description{{ p.id }}" class="form-label">Descrição (opcional)</label>
+            {{ add_hours_form.description(
+                 class_='form-control',
+                 id='description'~p.id,
+                 placeholder='Descrição do lançamento') }}
+          </div>
+          {{ add_hours_form.ref() }}
+        </div>
+        <div class="modal-footer">
+          <button type="button"
+                  class="btn btn-secondary btn-sm"
+                  data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          {{ add_hours_form.submit(class_='btn btn-primary btn-sm') }}
+        </div>
+      </form>
+    </div>
+  </div>
+{% endfor %}

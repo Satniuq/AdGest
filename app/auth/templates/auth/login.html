@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="utf-8">
+    <title>Login</title>
+    <!-- Favicon (opcional) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/logo_pag.png') }}">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Seu CSS customizado -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+      /* CSS inline para o layout de login (ou adicione no style.css) */
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .login-container {
+        display: flex;
+        width: 100%;
+        height: 100vh; /* Ocupa toda a altura da viewport */
+        overflow: hidden;
+        transition: all 0.5s ease;
+      }
+      .left-panel {
+        flex: 0 0 100%; /* Inicialmente 100% (ocupa toda a tela) */
+        transition: flex-basis 0.5s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #557500; /* Ajuste da cor ou use outra se preferir */
+      }
+      .right-panel {
+        flex: 0 0 0; /* Inicialmente oculto */
+        transition: flex-basis 0.5s ease;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: #ffffff; /* Fundo da área de login */
+      }
+      .login-container:hover .left-panel {
+        flex: 0 0 66.67%; /* 2/3 da tela */
+      }
+      .login-container:hover .right-panel {
+        flex: 0 0 33.33%; /* 1/3 da tela */
+      }
+      .left-panel .logo {
+        max-width: 80%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body class="login-page">
+    <div class="login-container">
+      <!-- Área da Esquerda: Apenas o Logo -->
+      <div class="left-panel">
+        <div class="d-flex justify-content-center align-items-center" style="height:80vh;">
+          <img class="logo" src="{{ url_for('static', filename='icons/Adgest logo principal.png') }}"
+               alt="Logo AdGest"
+               style="width:300px; height:300px; object-fit:cover">
+        </div>
+      </div>
+      <!-- Área da Direita: Formulário de Login -->
+      <div class="right-panel">
+        <div class="p-3" style="width: 100%;">
+          <h2 class="mb-3 text-center">Login</h2>
+          <form method="POST" class="needs-validation" novalidate>
+            {{ form.hidden_tag() }}
+            <!-- Supondo que macros.render_field() já formate os campos -->
+            {% import "macros.html" as macros %}
+            {{ macros.render_field(form.username) }}
+            {{ macros.render_field(form.password) }}
+            <div class="mb-3 text-center">
+              {{ form.submit(class="btn btn-primary") }}
+            </div>
+          </form>
+          <div class="mt-2 text-center">
+            <a href="{{ url_for('auth.reset_request') }}" class="btn btn-outline-secondary">Esqueceu a sua senha?</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS (inclui Popper.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Seu JS customizado (opcional) -->
+    <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
+  </body>
+</html>

@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Histórico de Notificações{% endblock %}
+{% block content %}
+<div class="container" id="notifications-container">
+  <h2 class="my-4">Histórico de Notificações</h2>
+
+  <!-- BARRA DE FILTROS -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <input type="text"
+             id="filter-text"
+             class="form-control"
+             placeholder="Buscar por termo…">
+    </div>
+    <div class="col-md-3">
+      <input type="date"
+             id="filter-start"
+             class="form-control"
+             placeholder="Data início">
+    </div>
+    <div class="col-md-3">
+      <input type="date"
+             id="filter-end"
+             class="form-control"
+             placeholder="Data fim">
+    </div>
+    <div class="col-md-2">
+      <button id="btn-clear-filters" class="btn btn-secondary w-100">
+        Limpar
+      </button>
+    </div>
+  </div>
+
+  <!-- LISTA DE NOTIFICAÇÕES -->
+  {% if notifications %}
+    <ul id="notifications-list" class="list-group">
+      {% for notif in notifications %}
+        <li class="notification-item list-group-item"
+            data-timestamp="{{ notif.timestamp.strftime('%Y-%m-%d') }}">
+          <strong class="notif-message">{{ notif.message }}</strong>
+          <br>
+          <small class="text-muted notif-timestamp">
+            {{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}
+          </small>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p id="no-notifications">Nenhuma notificação lida ainda.</p>
+    <ul id="notifications-list" class="list-group"></ul>
+  {% endif %}
+
+  <div id="loading" style="display: none; text-align: center; margin-top: 20px;">
+    <p>Carregando mais notificações…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  // referências aos inputs
+  const txt = document.getElementById('filter-text');
+  const start = document.getElementById('filter-start');
+  const end = document.getElementById('filter-end');
+  const clear = document.getElementById('btn-clear-filters');
+  const list = document.getElementById('notifications-list');
+
+  function applyFilters() {
+    const term = txt.value.trim().toLowerCase();
+    const d0 = start.value ? new Date(start.value) : null;
+    const d1 = end.value   ? new Date(end.value)   : null;
+
+    Array.from(list.children).forEach(li => {
+      const msg = li.querySelector('.notif-message').textContent.toLowerCase();
+      const dt  = new Date(li.dataset.timestamp);
+      
+      let visible = true;
+      if (term && !msg.includes(term)) visible = false;
+      if (d0 && dt < d0) visible = false;
+      if (d1 && dt > d1) visible = false;
+
+      li.style.display = visible ? '' : 'none';
+    });
+  }
+
+  txt.addEventListener('input', applyFilters);
+  start.addEventListener('change', applyFilters);
+  end.addEventListener('change', applyFilters);
+  clear.addEventListener('click', () => {
+    txt.value = '';
+    start.value = '';
+    end.value = '';
+    applyFilters();
+  });
+
+  // ***************
+  // infinite scroll (já existente)
+  let page = 1, loading = false, endOfList = false;
+  function loadNotifications() {
+    if (loading || endOfList) return;
+    loading = true;
+    page++;
+    document.getElementById("loading").style.display = "block";
+
+    fetch(`/notifications/historico?page=${page}`, {
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+      .then(r => { if(!r.ok) throw ''; return r.json(); })
+      .then(data => {
+        if (data.notifications.length) {
+          data.notifications.forEach(n => {
+            const li = document.createElement("li");
+            li.className = "notification-item list-group-item";
+            li.dataset.timestamp = n.timestamp.split(' ')[0];
+            li.innerHTML = `
+              <strong class="notif-message">${n.message}</strong><br>
+              <small class="text-muted notif-timestamp">${n.timestamp}</small>
+            `;
+            list.appendChild(li);
+          });
+          applyFilters();  // reaplica filtros nos itens novos
+        } else {
+          endOfList = true;
+        }
+      })
+      .catch(console.error)
+      .finally(() => {
+        loading = false;
+        document.getElementById("loading").style.display = "none";
+      });
+  }
+
+  window.addEventListener("scroll", () => {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+      loadNotifications();
+    }
+  });
+});
+</script>
+{% endblock %}

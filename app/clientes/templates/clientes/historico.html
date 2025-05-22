@@ -1,0 +1,189 @@
+{# templates/clientes/historico.html #}
+{% extends 'base.html' %}
+{% block content %}
+<div class="container py-4">
+
+  <h1 class="mb-4">Histórico do Cliente: {{ client.name }}</h1>
+
+  {# ─── ASSUNTOS E TAREFAS COLAPSÁVEIS ─── #}
+  <section class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Assuntos e Tarefas</h2>
+      <a href="{{ url_for('assuntos.create', client_id=client.id) }}" class="btn btn-success">
+        <i class="fa-solid fa-plus"></i> Novo Assunto
+      </a>
+    </div>
+
+    <div class="accordion" id="accordionAssuntos">
+      {% for assunto in assuntos_pendentes + assuntos_concluidos %}
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-assunto-{{ assunto.id }}">
+          <button class="accordion-button collapsed" type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapse-assunto-{{ assunto.id }}"
+                  aria-expanded="false"
+                  aria-controls="collapse-assunto-{{ assunto.id }}">
+            {{ assunto.title }}
+          </button>
+        </h2>
+        <div id="collapse-assunto-{{ assunto.id }}"
+             class="accordion-collapse collapse"
+             aria-labelledby="heading-assunto-{{ assunto.id }}"
+             data-bs-parent="#accordionAssuntos">
+          <div class="accordion-body p-0">
+            <div class="d-flex justify-content-end p-2">
+              <a href="{{ url_for('tarefas.create', assunto_id=assunto.id) }}" class="btn btn-sm btn-success">
+                <i class="fa-solid fa-plus"></i> Nova Tarefa
+              </a>
+            </div>
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Título</th>
+                  <th>Venc.</th>
+                  <th class="text-center">Status</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set tarefas_do_assunto = tarefas | selectattr('assunto_id','equalto',assunto.id) | list %}
+                {% if tarefas_do_assunto %}
+                  {% for t in tarefas_do_assunto %}
+                  <tr>
+                    <td>{{ t.title }}</td>
+                    <td>{{ t.due_date and t.due_date.strftime('%d/%m/%Y') or '–' }}</td>
+                    <td class="text-center">
+                      <form method="post" action="{{ url_for('tarefas.toggle',id=t.id) }}">
+                        {{ tarefa_comment_form.hidden_tag() }}
+                        <button type="submit" class="btn btn-sm {% if t.status=='open' %}btn-warning text-dark{% else %}btn-success{% endif %}">
+                          {{ t.status|capitalize }}
+                        </button>
+                      </form>
+                    </td>
+                    <td class="text-end">
+                      <a href="{{ url_for('tarefas.history',id=t.id) }}" class="btn btn-sm btn-outline-info">
+                        <i class="fa-solid fa-eye"></i>
+                      </a>
+                      <a href="{{ url_for('tarefas.edit',id=t.id) }}" class="btn btn-sm btn-outline-primary me-1">
+                        <i class="fa-solid fa-pen"></i>
+                      </a>
+                      <form method="post"
+                            action="{{ url_for('tarefas.delete', id=t.id) }}"
+                            class="d-inline"
+                            onsubmit="return confirm('Excluir esta tarefa?');">
+                        <button class="btn btn-sm btn-outline-danger" title="Excluir">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="4" class="text-center text-muted">— Nenhuma tarefa associada.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not (assuntos_pendentes + assuntos_concluidos) %}
+      <p class="text-center text-muted mt-3">— Nenhum assunto encontrado.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  {# ─── PROCESSOS E PRAZOS COLAPSÁVEIS ─── #}
+  <section>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h2>Processos e Prazos</h2>
+      <a href="{{ url_for('processos.create_process') }}" class="btn btn-success">
+        <i class="fa-solid fa-plus"></i> Novo Processo
+      </a>
+    </div>
+
+    <div class="accordion" id="accordionProcessos">
+      {% for proc in processos %}
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-proc-{{ proc.id }}">
+          <button class="accordion-button collapsed" type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapse-proc-{{ proc.id }}"
+                  aria-expanded="false"
+                  aria-controls="collapse-proc-{{ proc.id }}">
+            {{ proc.external_id or proc.id }} — {{ proc.description|truncate(30) }}
+          </button>
+        </h2>
+        <div id="collapse-proc-{{ proc.id }}"
+             class="accordion-collapse collapse"
+             aria-labelledby="heading-proc-{{ proc.id }}"
+             data-bs-parent="#accordionProcessos">
+          <div class="accordion-body p-0">
+            <div class="d-flex justify-content-end p-2">
+              <a href="{{ url_for('prazos.create_for_processo',processo_id=proc.id) }}" class="btn btn-sm btn-success">
+                <i class="fa-solid fa-plus"></i> Novo Prazo
+              </a>
+            </div>
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Descrição</th>
+                  <th class="text-center">Status</th>
+                  <th class="text-end">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% set prazos_do_processo = (prazos_pendentes + prazos_concluidos) | selectattr('processo.id','equalto',proc.id) | list %}
+                {% if prazos_do_processo %}
+                  {% for p in prazos_do_processo %}
+                  <tr>
+                    <td>{{ p.date.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ p.type.name }}</td>
+                    <td>{{ p.description|truncate(30) }}</td>
+                    <td class="text-center">
+                      <form method="post" action="{{ url_for('prazos.toggle_prazo_status',prazo_id=p.id) }}">
+                        {{ prazo_comment_form.hidden_tag() }}
+                        <button type="submit" class="btn btn-sm {% if p.status=='open' %}btn-warning text-dark{% else %}btn-success{% endif %}">
+                          {{ p.status|capitalize }}
+                        </button>
+                      </form>
+                    </td>
+                    <td class="text-end">
+                      <a href="{{ url_for('prazos.detail_prazo',prazo_id=p.id) }}" class="btn btn-sm btn-outline-info me-1">
+                        <i class="fa-solid fa-eye"></i>
+                      </a>
+                      <a href="{{ url_for('prazos.edit_prazo',prazo_id=p.id) }}" class="btn btn-sm btn-outline-primary me-1">
+                        <i class="fa-solid fa-pen"></i>
+                      </a>
+                      <form method="post" action="{{ url_for('prazos.delete_prazo',prazo_id=p.id) }}" class="d-inline" onsubmit="return confirm('Excluir este prazo?');">
+                        {{ prazo_comment_form.hidden_tag() }}
+                        <button class="btn btn-sm btn-outline-danger">
+                          <i class="fa-solid fa-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr>
+                    <td colspan="5" class="text-center text-muted">— Nenhum prazo associado.</td>
+                  </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% if not processos %}
+      <p class="text-center text-muted mt-3">— Nenhum processo encontrado.</p>
+      {% endif %}
+    </div>
+  </section>
+
+</div>
+{% endblock %}

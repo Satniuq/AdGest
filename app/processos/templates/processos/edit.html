@@ -1,0 +1,161 @@
+{# app/processos/templates/processos/edit.html #}
+{% extends 'base.html' %}
+{% block title %}Editar Processo{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h1 class="h3 mb-4">Editar Processo</h1>
+
+  {% if form.errors %}
+    <div class="alert alert-danger">
+      <strong>Por favor, corrija os erros abaixo.</strong>
+    </div>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {{ form.csrf_token }}
+    <div class="row g-3">
+      <!-- Identificador Externo -->
+      <div class="col-md-4">
+        {{ form.external_id.label(class_='form-label') }}
+        {{ form.external_id(class_='form-control', placeholder='Ex.: 2025/123') }}
+        {% for e in form.external_id.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Área de Prática -->
+      <div class="col-md-4">
+        {{ form.practice_area.label(class_='form-label') }}
+        {{ form.practice_area(class_='form-select') }}
+        {% for e in form.practice_area.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Tribunal -->
+      <div class="col-md-4">
+        {{ form.court.label(class_='form-label') }}
+        {{ form.court(class_='form-select') }}
+        {% for e in form.court.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Tipo de Caso -->
+      <div class="col-md-4">
+        {{ form.case_type.label(class_='form-label') }}
+        {{ form.case_type(class_='form-select select2', id='case_type_id', **{'data-live-search':'true'}) }}
+        {% for e in form.case_type.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Fase -->
+      <div class="col-md-4">
+        {{ form.phase.label(class_='form-label') }}
+        {{ form.phase(class_='form-select select2', id='phase_id', **{'data-live-search':'true'}) }}
+        {% for e in form.phase.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Cliente (busca por texto) -->
+      <div class="col-md-4">
+        {{ form.client.label(class_='form-label') }}
+        {{ form.client(class_='form-select select2', id='client_id', **{'data-live-search':'true','data-placeholder':'Digite para buscar...'}) }}
+        {% for e in form.client.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Advogado Líder -->
+      <div class="col-md-4">
+        {{ form.lead_attorney.label(class_='form-label') }}
+        {{ form.lead_attorney(class_='form-select select2', **{'data-live-search':'true'}) }}
+        {% for e in form.lead_attorney.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Co-Advogados -->
+      <div class="col-md-4">
+        {{ form.co_counsel.label(class_='form-label') }}
+        {{ form.co_counsel(class_='form-select select2', multiple=True, **{'data-live-search':'true'}) }}
+        {% for e in form.co_counsel.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Parte Adversa -->
+      <div class="col-md-6">
+        {{ form.opposing_party.label(class_='form-label') }}
+        {{ form.opposing_party(class_='form-control', id='opposing_party', rows='3', placeholder='Separe as partes por vírgula') }}
+        {% for e in form.opposing_party.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Valor Estimado -->
+      <div class="col-md-6">
+        {{ form.value_estimate.label(class_='form-label') }}
+        {{ form.value_estimate(class_='form-control') }}
+        {% for e in form.value_estimate.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Datas -->
+      <div class="col-md-4">
+        {{ form.opened_at.label(class_='form-label') }}
+        {{ form.opened_at(class_='form-control', type='date') }}
+        {% for e in form.opened_at.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="col-md-4">
+        {{ form.closed_at.label(class_='form-label') }}
+        {{ form.closed_at(class_='form-control', type='date') }}
+        {% for e in form.closed_at.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Status -->
+      <div class="col-md-4">
+        {{ form.status.label(class_='form-label') }}
+        {{ form.status(class_='form-select') }}
+        {% for e in form.status.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+
+      <!-- Etiquetas -->
+      <div class="col-12">
+        {{ form.tags.label(class_='form-label') }}
+        {{ form.tags(class_='form-select select2', multiple=True, **{'data-live-search':'true'}) }}
+        {% for e in form.tags.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">
+        <i class="fa-solid fa-pen-to-square me-1"></i> Atualizar
+      </button>
+      <a href="{{ url_for(
+          'dashboard_prazos.manage',
+          mode='processos',
+          client_id=client_id,
+          case_type_id=case_type_id,
+          phase_id=phase_id,
+          practice_area_id=practice_area_id,
+          court_id=court_id,
+          status=status
+        ) }}"
+      class="btn btn-secondary ms-2">
+      Cancelar
+    </a>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const ctSelect  = document.getElementById('case_type_id');
+  const phSelect  = document.getElementById('phase_id');
+  const initialPh = {{ form.phase.data.id if form.phase.data else 'null' }};
+  const ajaxTpl   = "{{ url_for('processos.ajax_phases', case_type_id=0) }}";
+
+  function loadPhases(ctId) {
+    phSelect.innerHTML = '<option value="">(nenhuma)</option>';
+    if (!ctId) return;
+    const url = ajaxTpl.replace('/0', '/' + ctId);
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(r => { if (!r.ok) throw new Error('Status ' + r.status); return r.json(); })
+      .then(list => list.forEach(ph => {
+        const opt = document.createElement('option'); opt.value = ph.id; opt.textContent = ph.name;
+        if (initialPh === ph.id) opt.selected = true;
+        phSelect.appendChild(opt);
+      }))
+      .catch(err => console.error('Erro ao carregar fases:', err));
+  }
+
+  ctSelect.addEventListener('change', () => loadPhases(ctSelect.value));
+  if (initialPh && ctSelect.value) loadPhases(ctSelect.value);
+});
+</script>
+{% endblock %}
