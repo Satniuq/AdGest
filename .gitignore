@@ -8,6 +8,7 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+*.py[cod]
 
 # Configurações da IDE
 .vscode/
