@@ -6,6 +6,8 @@ from flask import url_for
 from app import db
 from app.tarefas.models import Tarefa, TarefaHistory, TarefaBillingItem, TarefaNote
 from app.models_main import HoraAdicao
+from app.notifications.routes import criar_notificacao
+from app.tarefas.models import shared_tarefas, Tarefa, NotaHonorarios
 
 
 
@@ -154,14 +156,29 @@ class TarefaService:
 
     @staticmethod
     def delete(t: Tarefa, user):
-        envolvidos = set([t.owner] + t.shared_with.all())
+        # 1) limpa a relação many-to-many (shared_tarefas)
+        db.session.execute(
+            shared_tarefas.delete()
+                .where(shared_tarefas.c.tarefa_id == t.id)
+        )
+
+        # 2) remove todas as notas de honorários desta tarefa
+        NotaHonorarios.query.filter_by(tarefa_id=t.id).delete()
+
+        # 3) apaga a própria tarefa
         db.session.delete(t)
         db.session.commit()
+
+        # 4) notifica os envolvidos
+        envolvidos = set([t.owner] + t.shared_with.all())
         for u in envolvidos:
             if u.id != user.id:
-                criar_notificacao(u.id, "deleted",
-                                  f"{user.nickname} excluiu a tarefa '{t.title}'.",
-                                  url_for('assuntos.index'))
+                criar_notificacao(
+                    u.id,
+                    "deleted",
+                    f"{user.nickname} excluiu a tarefa '{t.title}'.",
+                    url_for('tarefas.list_for_assunto', assunto_id=t.assunto_id)
+                )
    
     
     @staticmethod
