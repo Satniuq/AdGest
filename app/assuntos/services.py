@@ -9,7 +9,7 @@ from app import db
 from app.assuntos.models import Assunto, AssuntoHistory, shared_assuntos, AssuntoNote
 from app.notifications.routes import criar_notificacao
 from app.notifications.models import Notification
-from app.tarefas.models import Tarefa, TarefaHistory
+from app.tarefas.models import Tarefa, TarefaHistory, shared_tarefas, NotaHonorarios
 from app.models_main import HourEntry
 from app.auth.models import User
 from app.tarefas.services import TarefaService
