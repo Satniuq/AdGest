@@ -12,6 +12,7 @@ from app.notifications.models import Notification
 from app.tarefas.models import Tarefa, TarefaHistory
 from app.models_main import HourEntry
 from app.auth.models import User
+from app.tarefas.services import TarefaService
 
 class AssuntoService:
 
@@ -235,20 +236,38 @@ class AssuntoService:
 
     @staticmethod
     def delete(a: Assunto, user):
-        # notifica antes de excluir
-        envolvidos = set([a.owner] + a.shared_with.all())
-        # remove links many-to-many
-        db.session.execute(shared_assuntos.delete().where(shared_assuntos.c.assunto_id == a.id))
+        # 1) limpa m2m de assunto <-> usuários
+        db.session.execute(
+            shared_assuntos.delete()
+                .where(shared_assuntos.c.assunto_id == a.id)
+        )
+
+        # 2) para cada tarefa ligada a este assunto, limpa tudo
+        tarefas = Tarefa.query.filter_by(assunto_id=a.id).all()
+        for t in tarefas:
+            # remove compartilhamentos
+            db.session.execute(
+                shared_tarefas.delete()
+                    .where(shared_tarefas.c.tarefa_id == t.id)
+            )
+            # remove notas de honorários
+            NotaHonorarios.query.filter_by(tarefa_id=t.id).delete()
+            # remove a própria tarefa
+            db.session.delete(t)
+
+        # 3) apaga o assunto
         db.session.delete(a)
         db.session.commit()
 
+        # 4) notifica os envolvidos (owner + compartilhados do assunto)
+        envolvidos = set([a.owner] + a.shared_with.all())
         for u in envolvidos:
             if u.id != user.id:
                 criar_notificacao(
                     u.id,
                     "deleted",
                     f"{user.nickname} excluiu o assunto '{a.title}'.",
-                    url_for('dashboard.dashboard')
+                    url_for('assuntos.list')
                 )
 
     @staticmethod
