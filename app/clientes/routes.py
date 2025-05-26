@@ -52,6 +52,9 @@ def clientes():
 @clientes_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create_client():
+
+    current_app.logger.debug(f"[DEBUG] create_client: current_user.role = {current_user.role!r}")
+
     form = ClientForm()
     form.current_user = current_user
     if form.validate_on_submit():
