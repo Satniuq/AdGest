@@ -84,6 +84,46 @@ def create_client():
     return render_template('clientes/create_client.html', form=form)
 
 
+@clientes_bp.route('/<int:client_id>/delete', methods=['POST'])
+@login_required
+def delete_client(client_id):
+    """
+    Exclui um cliente e todo o seu histórico.
+    Só permite se o user for owner ou tiver opção 'edit' no compartilhamento.
+    """
+    # 1. Busca o cliente
+    client = Client.query.get(client_id)
+    if not client:
+        flash("Cliente não encontrado.", "warning")
+        return redirect(url_for('client.clientes'))
+
+    # 2. Verifica autorização
+    is_owner = client.user_id == current_user.id
+    # verifica se há share com opção 'edit'
+    shared_edit = client.shares.filter_by(
+        user_id=current_user.id, option='edit'
+    ).first() is not None
+
+    if not (is_owner or shared_edit):
+        flash("Sem permissão para excluir este cliente.", "danger")
+        return redirect(url_for('client.clientes'))
+
+    # 3. Tenta apagar via serviço
+    try:
+        client_service.delete_client(client_id)
+        flash("Cliente excluído com sucesso!", "success")
+    except ValueError as e:
+        # delete_client lança ValueError se não encontrar o cliente
+        current_app.logger.error(f"Erro ao excluir cliente: {e}")
+        flash(str(e), "warning")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro de BD ao excluir cliente: {e}")
+        flash("Ocorreu um erro interno ao excluir o cliente.", "danger")
+
+    # 4. Redireciona para a lista de clientes
+    return redirect(url_for('client.clientes'))
+
 @clientes_bp.route('/upload_csv', methods=['GET', 'POST'])
 @login_required
 def upload_client_csv():

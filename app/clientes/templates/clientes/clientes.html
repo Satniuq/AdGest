@@ -30,21 +30,43 @@
               {% if client.telephone %}Tel: {{ client.telephone }}{% endif %}
             </p>
           </div>
-          <div class="card-footer d-flex justify-content-between align-items-center">
-            <div>
-              <a href="{{ url_for('client.client_info', client_id=client.id) }}" class="btn btn-primary btn-sm">Info</a>
-              <a href="{{ url_for('client.client_history', client_id=client.id) }}" class="btn btn-info btn-sm">Histórico</a>
-              <a href="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}" class="btn btn-secondary btn-sm">Contabilidade</a>
+          <div class="card-footer">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <a href="{{ url_for('client.client_info', client_id=client.id) }}"
+                  class="btn btn-primary btn-sm me-1">
+                  Info
+                </a>
+                <a href="{{ url_for('client.client_history', client_id=client.id) }}"
+                  class="btn btn-info btn-sm me-1">
+                  Histórico
+                </a>
+                <a href="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}"
+                  class="btn btn-secondary btn-sm me-1">
+                  Contabilidade
+                </a>
+                <a href="{{ url_for('client.share_client', client_id=client.id) }}"
+                  class="btn btn-info btn-sm me-1">
+                  Partilhar
+                </a>
+                <form action="{{ url_for('client.delete_client', client_id=client.id) }}"
+                      method="post"
+                      class="d-inline-block me-1"
+                      onsubmit="return confirm('Tem certeza que deseja excluir este cliente?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-danger btn-sm">
+                    Excluir
+                  </button>
+                </form>
+              </div>
             </div>
-            <div>
-              <!-- Novo Botão de Partilhar -->
-              <a href="{{ url_for('client.share_client', client_id=client.id) }}" class="btn btn-sm btn-info">Partilhar</a>
-            </div>
-          </div>                                                  
+          </div>
+
         </div>
       </div>
     {% endfor %}
   </div>
+
   
   <!-- Controles de paginação -->
   {% if pagination.pages > 1 %}

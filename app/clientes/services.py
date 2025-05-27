@@ -18,6 +18,9 @@ from app.prazos.models import PrazoJudicial
 from app.tarefas.models import TarefaHistory, Tarefa
 from app.prazos.models import PrazoHistory
 from app.utils import normalize_header
+from app.billing.models import BillingNota
+from app.accounting.models import DocumentoContabilistico
+from sqlalchemy.exc import NoResultFound
 
 
 def list_clients(
@@ -135,6 +138,53 @@ def parse_csv(file_storage) -> List[Dict[str, str]]:
             for k, v in row.items()
         })
     return registros
+
+
+def delete_client(client_id: int):
+    """
+    Remove manualmente tudo que referencia client_id, depois apaga o Client.
+    """
+    client = Client.query.get(client_id)
+    if not client:
+        raise ValueError(f"Cliente com id {client_id} não encontrado.")
+
+    # 1) Apaga compartilhamentos de cliente
+    db.session.query(ClientShare) \
+        .filter(ClientShare.client_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 2) Apaga notas de faturação
+    db.session.query(BillingNota) \
+        .filter(BillingNota.cliente_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 3) Apaga documentos contabilísticos
+    db.session.query(DocumentoContabilistico) \
+        .filter(DocumentoContabilistico.client_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 4) Apaga prazos judiciais
+    db.session.query(PrazoJudicial) \
+        .filter(PrazoJudicial.client_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 5) Apaga processos
+    db.session.query(Processo) \
+        .filter(Processo.client_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 6) Apaga assuntos (tarefas ligadas a assuntos também herdam o delete)
+    db.session.query(Assunto) \
+        .filter(Assunto.client_id == client_id) \
+        .delete(synchronize_session=False)
+
+    # 7) Finalmente, apaga o próprio cliente
+    db.session.delete(client)
+
+    # 8) Commit único
+    db.session.commit()
+
+    return True
 
 
 def import_clients(
