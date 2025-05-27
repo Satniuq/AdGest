@@ -275,7 +275,7 @@ def get_client_history(client_id: int, user_id: int) -> Dict[str, Any]:
         Assunto.query
         .join(Assunto.client)
         .filter(
-            Client.number_interno == client.number_interno,
+            Assunto.client_id == client.id,
             Assunto.status == 'closed',
             or_(
                 Assunto.owner_id == user_id,
@@ -288,7 +288,7 @@ def get_client_history(client_id: int, user_id: int) -> Dict[str, Any]:
         Assunto.query
         .join(Assunto.client)
         .filter(
-            Client.number_interno == client.number_interno,
+            Assunto.client_id == client.id,
             Assunto.status == 'open',
             or_(
                 Assunto.owner_id == user_id,

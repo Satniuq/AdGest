@@ -12,6 +12,7 @@ from wtforms_sqlalchemy.fields import (
 )
 
 from app.processos.models import (
+    Processo,
     CaseType,
     Phase,
     PracticeArea,
@@ -19,6 +20,9 @@ from app.processos.models import (
     Tag
 )
 from app.auth.models import User
+from app.clientes.models import Client
+from app import db
+
 
 class DummyForm(FlaskForm):
     """Formulário vazio só para CSRF token."""
