@@ -9,7 +9,7 @@ from app import db
 from app.assuntos.models import Assunto, AssuntoHistory, shared_assuntos, AssuntoNote
 from app.notifications.routes import criar_notificacao
 from app.notifications.models import Notification
-from app.tarefas.models import Tarefa, TarefaHistory, shared_tarefas, NotaHonorarios
+from app.tarefas.models import Tarefa, TarefaHistory, shared_tarefas, NotaHonorarios, NotaHonorariosItem
 from app.models_main import HourEntry
 from app.auth.models import User
 from app.tarefas.services import TarefaService
@@ -236,7 +236,7 @@ class AssuntoService:
 
     @staticmethod
     def delete(a: Assunto, user):
-        # 1) limpa m2m de assunto <-> usuários
+        # 1) limpa m2m assunto <-> usuários
         db.session.execute(
             shared_assuntos.delete()
                 .where(shared_assuntos.c.assunto_id == a.id)
@@ -245,21 +245,28 @@ class AssuntoService:
         # 2) para cada tarefa ligada a este assunto, limpa tudo
         tarefas = Tarefa.query.filter_by(assunto_id=a.id).all()
         for t in tarefas:
-            # remove compartilhamentos
+            # 2a) remove compartilhamentos (M2M)
             db.session.execute(
                 shared_tarefas.delete()
                     .where(shared_tarefas.c.tarefa_id == t.id)
             )
-            # remove notas de honorários
+            # 2b) remove itens de nota de honorários desta tarefa
+            NotaHonorariosItem.query.filter(
+                NotaHonorariosItem.nota_id.in_(
+                    db.session.query(NotaHonorarios.id)
+                        .filter_by(tarefa_id=t.id)
+                )
+            ).delete(synchronize_session=False)
+            # 2c) remove cabeçalhos de nota de honorários
             NotaHonorarios.query.filter_by(tarefa_id=t.id).delete()
-            # remove a própria tarefa
+            # 2d) remove a própria tarefa
             db.session.delete(t)
 
         # 3) apaga o assunto
         db.session.delete(a)
         db.session.commit()
 
-        # 4) notifica os envolvidos (owner + compartilhados do assunto)
+        # 4) notifica os envolvidos (owner + quem o assunto estava partilhado)
         envolvidos = set([a.owner] + a.shared_with.all())
         for u in envolvidos:
             if u.id != user.id:
