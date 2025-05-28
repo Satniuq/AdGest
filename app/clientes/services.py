@@ -215,6 +215,9 @@ def import_clients(
     2. Se não encontrar, cria um novo Client; se o nome conflitar, adiciona sufixo "(2)", "(3)"...
     Retorna o número de registros processados.
     """
+
+    BATCH_SIZE = 500
+
     def name_conflicts(name: str, exclude_id: Optional[int] = None) -> bool:
         q = Client.query.filter(Client.user_id == user_id, Client.name == name)
         if exclude_id:
@@ -230,6 +233,7 @@ def import_clients(
         return candidate
 
     count = 0
+
     for row in registros:
         # Extrai e normaliza os campos
         name = (row.get('client') or row.get('cliente') or
@@ -238,19 +242,20 @@ def import_clients(
             continue
 
         number_interno = (row.get('number_interno') or row.get('numero_interno') or '').strip()
-        nif = row.get('nif', '').strip()
-        address = (row.get('address') or row.get('endereco') or '').strip()
-        email = row.get('email', '').strip()
-        telephone = (row.get('telephone') or row.get('telefone') or '').strip()
+        nif           = row.get('nif', '').strip()
+        address       = (row.get('address') or row.get('endereco') or '').strip()
+        email         = row.get('email', '').strip()
+        telephone     = (row.get('telephone') or row.get('telefone') or '').strip()
 
-        # 1) tenta achar por NIF ou Nº interno
+        # 1) tenta achar por NIF ou Nº interno sem causar autoflush
         client = None
-        if nif:
-            client = Client.query.filter_by(nif=nif, user_id=user_id).first()
-        if not client and number_interno:
-            client = Client.query.filter_by(
-                number_interno=number_interno, user_id=user_id
-            ).first()
+        with db.session.no_autoflush:
+            if nif:
+                client = Client.query.filter_by(nif=nif, user_id=user_id).first()
+            if not client and number_interno:
+                client = Client.query.filter_by(
+                    number_interno=number_interno, user_id=user_id
+                ).first()
 
         if client:
             # Marca sempre como público
@@ -258,12 +263,11 @@ def import_clients(
             # Atualiza campos: nome só se não conflitar
             if name and name != client.name and not name_conflicts(name, exclude_id=client.id):
                 client.name = name
-            # Mantém o antigo name se conflitar ou estiver vazio
             client.number_interno = number_interno or client.number_interno
-            client.nif = nif or client.nif
-            client.address = address or client.address
-            client.email = email or client.email
-            client.telephone = telephone or client.telephone
+            client.nif            = nif or client.nif
+            client.address        = address or client.address
+            client.email          = email or client.email
+            client.telephone      = telephone or client.telephone
 
         else:
             # 2) cria novo Cliente
@@ -285,16 +289,26 @@ def import_clients(
 
         count += 1
 
+        # Commit e limpa a sessão de 500 em 500
+        if count % BATCH_SIZE == 0:
+            try:
+                db.session.commit()
+            except IntegrityError as e:
+                db.session.rollback()
+                current_app.logger.error(f"Erro ao importar lote de clientes: {e}")
+                raise
+            # Liberta objetos já persistidos da memória
+            db.session.expunge_all()
+
+    # Commit final
     try:
         db.session.commit()
     except IntegrityError as e:
         db.session.rollback()
         current_app.logger.error(f"Erro ao importar clientes: {e}")
-        # relança para a rota poder mostrar flash apropriado
         raise
 
     return count
-
 
 
 def share_client(
