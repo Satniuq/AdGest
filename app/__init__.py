@@ -13,7 +13,6 @@ from app.extensions import db, migrate, login_manager, mail, csrf
 from app.auth.models import User
 from app.utils import OFFICE_ROLES
 
-
 def create_app():
     # --- CRIAÇÃO E CONFIGURAÇÃO DA APP ---
     flask_app = Flask(__name__, instance_relative_config=True)
@@ -92,6 +91,28 @@ def create_app():
     login_manager.init_app(flask_app)
     mail.init_app(flask_app)
     csrf.init_app(flask_app)
+
+    # ─── SESSÃO SERVER-SIDE ───
+    from flask_session import Session
+
+    # Usa flask_app.config['ENV'], que vale "development" ou "production"
+    if flask_app.config.get('ENV') == 'production':
+        flask_app.config['SESSION_TYPE'] = 'sqlalchemy'
+        flask_app.config['SESSION_SQLALCHEMY'] = db
+    else:
+        flask_app.config['SESSION_TYPE'] = 'filesystem'
+
+    # Configurações comuns
+    flask_app.config['SESSION_PERMANENT'] = False
+    flask_app.config['SESSION_USE_SIGNER'] = True
+
+    # Inicializa o session store
+    Session(flask_app)
+
+    # Garante que a tabela 'session' existe no DB (CREATE IF NOT EXISTS)
+    with flask_app.app_context():
+        db.create_all()
+
 
     @flask_app.errorhandler(CSRFError)
     def handle_csrf_error(e):

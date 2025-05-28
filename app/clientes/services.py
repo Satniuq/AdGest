@@ -126,17 +126,34 @@ def update_client(
 
 
 def parse_csv(file_storage) -> List[Dict[str, str]]:
-    sample = file_storage.read(1024).decode('utf-8')
-    file_storage.seek(0)
-    dialect = csv.Sniffer().sniff(sample)
-    stream = StringIO(file_storage.read().decode('utf-8'))
+    # lê todo o conteúdo e tenta decodificar mantendo BOM
+    content = file_storage.read()
+    for enc in ('utf-8-sig', 'utf-8', 'latin1'):
+        try:
+            text = content.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
+    # sample para sniff
+    sample = text[:1024]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=';,')
+    except csv.Error:
+        # fallback para ponto-e-vírgula
+        dialect = csv.excel()
+        dialect.delimiter = ';'
+    # cria o reader a partir do texto já decodificado
+    stream = StringIO(text)
     reader = csv.DictReader(stream, dialect=dialect)
+
     registros: List[Dict[str, str]] = []
     for row in reader:
         registros.append({
             normalize_header(k): (v.strip() if v else '')
             for k, v in row.items()
         })
+    # para ver no log exatamente o que chegou
+    current_app.logger.debug(f"[CSV] registros normalizados: {registros}")
     return registros
 
 
