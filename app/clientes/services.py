@@ -209,16 +209,15 @@ def import_clients(
     registros: List[Dict[str, str]]
 ) -> int:
     """
-    Para cada linha do CSV:
-    1. Se encontrar um Client existente por NIF ou number_interno, atualiza TODOS os campos (exceto nome,
-       se o novo nome conflitar com outro cliente).
-    2. Se não encontrar, cria um novo Client; se o nome conflitar, adiciona sufixo "(2)", "(3)"...
-    Retorna o número de registros processados.
+    Bulk import de clientes:
+    - Atualiza os que já existem (por nif ou número interno).
+    - Insere os novos, assegurando que o campo `name` é único por utilizador,
+      criando sufixos "(2)", "(3)"… conforme necessário.
     """
 
     BATCH_SIZE = 1000
 
-    # 1) Carrega TODOS os clientes existentes deste user numa única query
+    # 1) Carrega todos os clientes existentes deste user
     existing_clients = (
         Client.query
         .filter_by(user_id=user_id)
@@ -228,12 +227,16 @@ def import_clients(
     by_nif      = {c.nif: c for c in existing_clients if c.nif}
     by_internal = {c.number_interno: c for c in existing_clients if c.number_interno}
 
-    # Mantém nomes usados para gerar nomes únicos
+    # Conjunto de nomes já usados (existentes + inseridos neste import)
     used_names = {c.name for c in existing_clients}
 
     def unique_name(base: str) -> str:
-        suffix = 1
+        """
+        Gera um nome único com base em `base`, adicionando sufixo
+        "(2)", "(3)"… se necessário, e insere no used_names.
+        """
         candidate = base
+        suffix = 1
         while candidate in used_names:
             suffix += 1
             candidate = f"{base} ({suffix})"
@@ -244,8 +247,8 @@ def import_clients(
     to_insert: List[Dict] = []
     count = 0
 
-    def flush_batch(final: bool = False):
-        """Executa bulk updates/inserts e faz commit."""
+    def flush_batch():
+        """Executa bulk updates e inserts, faz commit e limpa as listas."""
         if to_update:
             db.session.bulk_update_mappings(Client, to_update)
         if to_insert:
@@ -260,7 +263,7 @@ def import_clients(
             to_update.clear()
             to_insert.clear()
 
-    # 2) Processa cada linha do CSV
+    # 2) Itera sobre cada registro CSV
     for row in registros:
         name = (row.get('client') or row.get('cliente') or
                 row.get('name')   or row.get('nome')    or '').strip()
@@ -273,6 +276,7 @@ def import_clients(
         email          = (row.get('email') or '').strip() or None
         telephone      = (row.get('telephone') or row.get('telefone') or '').strip() or None
 
+        # Verifica se já existe por nif ou número interno
         existing = None
         if nif and nif in by_nif:
             existing = by_nif[nif]
@@ -297,11 +301,11 @@ def import_clients(
                 'telephone':        telephone      or existing.telephone,
             })
         else:
-            # Prepara mapping de insert
-            unique = name if name not in used_names else unique_name(name)
+            # Gera nome único para insert
+            safe_name = name if name not in used_names else unique_name(name)
             to_insert.append({
                 'user_id':         user_id,
-                'name':            unique,
+                'name':            safe_name,
                 'is_public':       True,
                 'number_interno':  number_interno,
                 'nif':             nif,
@@ -312,13 +316,14 @@ def import_clients(
 
         count += 1
 
-        # A cada BATCH_SIZE, flush para o banco
+        # Flush a cada BATCH_SIZE
         if count % BATCH_SIZE == 0:
             flush_batch()
 
-    # Commit final dos restantes
-    flush_batch(final=True)
+    # Flush final dos restantes
+    flush_batch()
     return count
+
 
 def share_client(
     client: Client,
