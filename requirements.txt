@@ -11,5 +11,6 @@ gunicorn
 pymysql
 google-cloud-storage
 python-dotenv
+Flask-Session>=0.4.0
 
 
