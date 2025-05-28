@@ -227,7 +227,7 @@ def import_clients(
     by_nif      = {c.nif: c for c in existing_clients if c.nif}
     by_internal = {c.number_interno: c for c in existing_clients if c.number_interno}
 
-    # Conjunto de nomes já usados (existentes + inseridos neste import)
+    # Conjunto de nomes já usados (existentes)
     used_names = {c.name for c in existing_clients}
 
     def unique_name(base: str) -> str:
@@ -235,8 +235,8 @@ def import_clients(
         Gera um nome único com base em `base`, adicionando sufixo
         "(2)", "(3)"… se necessário, e insere no used_names.
         """
-        candidate = base
         suffix = 1
+        candidate = base
         while candidate in used_names:
             suffix += 1
             candidate = f"{base} ({suffix})"
@@ -302,7 +302,12 @@ def import_clients(
             })
         else:
             # Gera nome único para insert
-            safe_name = name if name not in used_names else unique_name(name)
+            if name in used_names:
+                safe_name = unique_name(name)
+            else:
+                safe_name = name
+                used_names.add(safe_name)
+
             to_insert.append({
                 'user_id':         user_id,
                 'name':            safe_name,
