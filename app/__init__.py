@@ -95,21 +95,23 @@ def create_app():
     # ─── SESSÃO SERVER-SIDE ───
     from flask_session import Session
 
-    # Usa flask_app.config['ENV'], que vale "development" ou "production"
-    if flask_app.config.get('ENV') == 'production':
+    # Se estou a correr no App Engine (ou noutro ambiente read-only), força sqlalchemy
+    if os.environ.get('GAE_INSTANCE') is not None:
+        flask_app.config['SESSION_TYPE'] = 'sqlalchemy'
+        flask_app.config['SESSION_SQLALCHEMY'] = db
+    elif flask_app.config.get('ENV') == 'production':
+        # outros ambientes de produção “normais”
         flask_app.config['SESSION_TYPE'] = 'sqlalchemy'
         flask_app.config['SESSION_SQLALCHEMY'] = db
     else:
+        # dev local
         flask_app.config['SESSION_TYPE'] = 'filesystem'
 
-    # Configurações comuns
     flask_app.config['SESSION_PERMANENT'] = False
     flask_app.config['SESSION_USE_SIGNER'] = True
 
-    # Inicializa o session store
     Session(flask_app)
 
-    # Garante que a tabela 'session' existe no DB (CREATE IF NOT EXISTS)
     with flask_app.app_context():
         db.create_all()
 
