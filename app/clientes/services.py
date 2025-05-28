@@ -210,106 +210,115 @@ def import_clients(
 ) -> int:
     """
     Para cada linha do CSV:
-    1. Se encontrar um Client existente por NIF ou number_interno, atualiza TODOS os campos (exceto nome, 
+    1. Se encontrar um Client existente por NIF ou number_interno, atualiza TODOS os campos (exceto nome,
        se o novo nome conflitar com outro cliente).
     2. Se não encontrar, cria um novo Client; se o nome conflitar, adiciona sufixo "(2)", "(3)"...
     Retorna o número de registros processados.
     """
 
-    BATCH_SIZE = 500
+    BATCH_SIZE = 1000
 
-    def name_conflicts(name: str, exclude_id: Optional[int] = None) -> bool:
-        q = Client.query.filter(Client.user_id == user_id, Client.name == name)
-        if exclude_id:
-            q = q.filter(Client.id != exclude_id)
-        return q.first() is not None
+    # 1) Carrega TODOS os clientes existentes deste user numa única query
+    existing_clients = (
+        Client.query
+        .filter_by(user_id=user_id)
+        .with_entities(Client.id, Client.nif, Client.number_interno, Client.name)
+        .all()
+    )
+    by_nif      = {c.nif: c for c in existing_clients if c.nif}
+    by_internal = {c.number_interno: c for c in existing_clients if c.number_interno}
 
-    def make_unique_name(base: str) -> str:
+    # Mantém nomes usados para gerar nomes únicos
+    used_names = {c.name for c in existing_clients}
+
+    def unique_name(base: str) -> str:
         suffix = 1
         candidate = base
-        while name_conflicts(candidate):
+        while candidate in used_names:
             suffix += 1
             candidate = f"{base} ({suffix})"
+        used_names.add(candidate)
         return candidate
 
+    to_update: List[Dict] = []
+    to_insert: List[Dict] = []
     count = 0
 
+    def flush_batch(final: bool = False):
+        """Executa bulk updates/inserts e faz commit."""
+        if to_update:
+            db.session.bulk_update_mappings(Client, to_update)
+        if to_insert:
+            db.session.bulk_insert_mappings(Client, to_insert)
+        try:
+            db.session.commit()
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro bulk import clients: {e}")
+            raise
+        finally:
+            to_update.clear()
+            to_insert.clear()
+
+    # 2) Processa cada linha do CSV
     for row in registros:
-        # Extrai e normaliza os campos
         name = (row.get('client') or row.get('cliente') or
-                row.get('name') or row.get('nome') or '').strip()
+                row.get('name')   or row.get('nome')    or '').strip()
         if not name:
             continue
 
-        number_interno = (row.get('number_interno') or row.get('numero_interno') or '').strip()
-        nif           = row.get('nif', '').strip()
-        address       = (row.get('address') or row.get('endereco') or '').strip()
-        email         = row.get('email', '').strip()
-        telephone     = (row.get('telephone') or row.get('telefone') or '').strip()
+        number_interno = (row.get('number_interno') or row.get('numero_interno') or '').strip() or None
+        nif            = row.get('nif', '').strip() or None
+        address        = (row.get('address') or row.get('endereco') or '').strip() or None
+        email          = (row.get('email') or '').strip() or None
+        telephone      = (row.get('telephone') or row.get('telefone') or '').strip() or None
 
-        # 1) tenta achar por NIF ou Nº interno sem causar autoflush
-        client = None
-        with db.session.no_autoflush:
-            if nif:
-                client = Client.query.filter_by(nif=nif, user_id=user_id).first()
-            if not client and number_interno:
-                client = Client.query.filter_by(
-                    number_interno=number_interno, user_id=user_id
-                ).first()
+        existing = None
+        if nif and nif in by_nif:
+            existing = by_nif[nif]
+        elif number_interno and number_interno in by_internal:
+            existing = by_internal[number_interno]
 
-        if client:
-            # Marca sempre como público
-            client.is_public = True
-            # Atualiza campos: nome só se não conflitar
-            if name and name != client.name and not name_conflicts(name, exclude_id=client.id):
-                client.name = name
-            client.number_interno = number_interno or client.number_interno
-            client.nif            = nif or client.nif
-            client.address        = address or client.address
-            client.email          = email or client.email
-            client.telephone      = telephone or client.telephone
+        if existing:
+            # Prepara mapping de update
+            new_name = existing.name
+            if name != existing.name and name not in used_names:
+                new_name = name
+                used_names.add(new_name)
 
+            to_update.append({
+                'id':               existing.id,
+                'name':             new_name,
+                'is_public':        True,
+                'number_interno':   number_interno or existing.number_interno,
+                'nif':              nif            or existing.nif,
+                'address':          address        or existing.address,
+                'email':            email          or existing.email,
+                'telephone':        telephone      or existing.telephone,
+            })
         else:
-            # 2) cria novo Cliente
-            new_name = name
-            if name_conflicts(new_name):
-                new_name = make_unique_name(new_name)
-
-            client = Client(
-                user_id=user_id,
-                name=new_name,
-                is_public=True,
-                number_interno=number_interno or None,
-                nif=nif or None,
-                address=address or None,
-                email=email or None,
-                telephone=telephone or None
-            )
-            db.session.add(client)
+            # Prepara mapping de insert
+            unique = name if name not in used_names else unique_name(name)
+            to_insert.append({
+                'user_id':         user_id,
+                'name':            unique,
+                'is_public':       True,
+                'number_interno':  number_interno,
+                'nif':             nif,
+                'address':         address,
+                'email':           email,
+                'telephone':       telephone,
+            })
 
         count += 1
 
-        # Commit e limpa a sessão de 500 em 500
+        # A cada BATCH_SIZE, flush para o banco
         if count % BATCH_SIZE == 0:
-            try:
-                db.session.commit()
-            except IntegrityError as e:
-                db.session.rollback()
-                current_app.logger.error(f"Erro ao importar lote de clientes: {e}")
-                raise
-            # Liberta objetos já persistidos da memória
-            db.session.expunge_all()
+            flush_batch()
 
-    # Commit final
-    try:
-        db.session.commit()
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Erro ao importar clientes: {e}")
-        raise
-
+    # Commit final dos restantes
+    flush_batch(final=True)
     return count
-
 
 def share_client(
     client: Client,
