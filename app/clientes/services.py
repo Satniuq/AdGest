@@ -214,16 +214,24 @@ def import_clients(
     - Insere os novos, assegurando que o campo `name` é único por utilizador,
       criando sufixos "(2)", "(3)"… conforme necessário.
     """
-
     BATCH_SIZE = 1000
 
     # 1) Carrega todos os clientes existentes deste user
     existing_clients = (
         Client.query
         .filter_by(user_id=user_id)
-        .with_entities(Client.id, Client.nif, Client.number_interno, Client.name)
+        .with_entities(
+            Client.id,
+            Client.nif,
+            Client.number_interno,
+            Client.name,
+            Client.address,
+            Client.email,
+            Client.telephone
+        )
         .all()
     )
+    # Mapas para lookup rápido
     by_nif      = {c.nif: c for c in existing_clients if c.nif}
     by_internal = {c.number_interno: c for c in existing_clients if c.number_interno}
 
@@ -265,16 +273,20 @@ def import_clients(
 
     # 2) Itera sobre cada registro CSV
     for row in registros:
+        # extração robusta dos campos
         name = (row.get('client') or row.get('cliente') or
                 row.get('name')   or row.get('nome')    or '').strip()
         if not name:
             continue
 
-        number_interno = (row.get('number_interno') or row.get('numero_interno') or '').strip() or None
-        nif            = row.get('nif', '').strip() or None
-        address        = (row.get('address') or row.get('endereco') or '').strip() or None
-        email          = (row.get('email') or '').strip() or None
-        telephone      = (row.get('telephone') or row.get('telefone') or '').strip() or None
+        number_interno = (row.get('number_interno') or
+                          row.get('numero_interno') or '').strip() or None
+        nif       = (row.get('nif') or '').strip() or None
+        address   = (row.get('address') or
+                     row.get('endereco') or '').strip() or None
+        email     = (row.get('email') or '').strip() or None
+        telephone = (row.get('telephone') or
+                     row.get('telefone') or '').strip() or None
 
         # Verifica se já existe por nif ou número interno
         existing = None
@@ -302,10 +314,8 @@ def import_clients(
             })
         else:
             # Gera nome único para insert
-            if name in used_names:
-                safe_name = unique_name(name)
-            else:
-                safe_name = name
+            safe_name = name if name not in used_names else unique_name(name)
+            if safe_name not in used_names:
                 used_names.add(safe_name)
 
             to_insert.append({
