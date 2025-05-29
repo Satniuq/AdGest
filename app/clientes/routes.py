@@ -35,17 +35,26 @@ from app.clientes import services as client_service
 def clientes():
     page = request.args.get('page', 1, type=int)
     search = request.args.get('q', '').strip()
+    order = request.args.get('order', 'asc')
+    prefix = request.args.get('prefix', '').strip()
+    nif = request.args.get('nif', '').strip()
     pagination = client_service.list_clients(
         user_id=current_user.id,
         page=page,
         per_page=10,
-        search=search
+        search=search,
+        order=order,
+        prefix=prefix,
+        nif=nif,
     )
     return render_template(
         'clientes/clientes.html',
         clients=pagination.items,
         pagination=pagination,
-        search=search
+        search=search,
+        order=order,
+        prefix=prefix,
+        nif=nif,
     )
 
 

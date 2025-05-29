@@ -4,7 +4,7 @@ import csv
 from io import StringIO
 from typing import List, Dict, Optional, Tuple, Any
 from flask import current_app, url_for, abort
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case, cast, Integer
 from sqlalchemy.exc import IntegrityError
 
 from app import db
@@ -27,17 +27,16 @@ def list_clients(
     user_id: int,
     page: int = 1,
     per_page: int = 10,
-    search: str = ''
+    search: str = '',
+    order: str = 'asc',
+    prefix: str = '',
+    nif: str = '',
 ):
-    # escritório (públicos)
     public_q = Client.query.filter(Client.is_public.is_(True))
-    # próprios (privados do utilizador)
     own_q    = Client.query.filter(Client.user_id == user_id)
-    # partilhados
     shared_q = Client.query\
        .join(ClientShare, Client.id == ClientShare.client_id)\
        .filter(ClientShare.user_id == user_id)
-    # união de todos
     query = public_q.union_all(own_q).union_all(shared_q)
 
     if search:
@@ -45,10 +44,36 @@ def list_clients(
         query = query.filter(
             or_(
                 Client.name.ilike(term),
-                Client.number_interno.ilike(term)
+                Client.number_interno.ilike(term),
+                Client.nif.ilike(term)
             )
         )
-    return query.order_by(func.lower(Client.name)).paginate(page=page, per_page=per_page)
+
+    if prefix:
+        prefix_term = f"{prefix}%"
+        query = query.filter(Client.name.ilike(prefix_term))
+
+    if nif:
+        query = query.filter(Client.nif.ilike(f"%{nif}%"))
+
+    # Ordenação numérica "correta" mesmo que sejam strings (ex: "0002", "10", "2")
+    if order == 'desc':
+        query = query.order_by(
+            case(
+                (Client.number_interno != None, cast(Client.number_interno, Integer)),
+                else_=0
+            ).desc()
+        )
+    else:
+        query = query.order_by(
+            case(
+                (Client.number_interno != None, cast(Client.number_interno, Integer)),
+                else_=0
+            ).asc()
+        )
+
+    return query.paginate(page=page, per_page=per_page)
+
 
 
 def get_client_or_404(client_id: int, user_id: int) -> Client:

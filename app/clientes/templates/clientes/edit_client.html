@@ -4,6 +4,7 @@
 <div class="container">
   <h2 class="text-center my-4">Editar Cliente</h2>
   <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3">
       <label for="name" class="form-label">Nome do Cliente</label>
       <input type="text" class="form-control" id="name" name="name" value="{{ client.name }}" required>

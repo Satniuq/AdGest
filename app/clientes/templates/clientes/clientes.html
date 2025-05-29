@@ -4,77 +4,104 @@
 <div class="container my-4">
   <h2 class="mb-4 text-center">Lista de Clientes</h2>
   
-  <!-- Botão Criar Cliente e CSV -->
   <div class="text-end mb-3">
     <a href="{{ url_for('client.upload_client_csv') }}" class="btn btn-outline-primary">Importar Clientes CSV</a>
     <a href="{{ url_for('client.create_client') }}" class="btn btn-success">+ Criar Cliente</a>
   </div>
-  
-  <!-- Caixa de pesquisa -->
-  <form method="GET" action="{{ url_for('client.clientes') }}" class="mb-3">
-    <input type="text" name="q" id="clientSearch" class="form-control" placeholder="Pesquisar cliente (nome ou número interno)..." value="{{ search }}">
+
+  <!-- Filtros e ordenação -->
+  <form method="get" action="{{ url_for('client.clientes') }}" class="mb-3 row g-2 align-items-end">
+    <div class="col-md-4">
+      <input type="text" name="q" class="form-control"
+             placeholder="Pesquise por nome, número ou nif" value="{{ search }}">
+    </div>
+
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+    </div>
   </form>
 
-  <!-- Exibição dos clientes em cards -->
-  <div class="row" id="clientList">
-    {% for client in clients %}
-      <div class="col-md-4 mb-3 client-card">
-        <div class="card h-100">
-          <div class="card-body">
-            <h5 class="card-title">{{ client.name }}</h5>
-            {% if client.number_interno %}
-              <h6 class="card-subtitle mb-2 text-muted">{{ client.number_interno }}</h6>
-            {% endif %}
-            <p class="card-text">
-              {% if client.email %}Email: {{ client.email }}<br>{% endif %}
-              {% if client.telephone %}Tel: {{ client.telephone }}{% endif %}
-            </p>
-          </div>
-          <div class="card-footer">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('client.client_info', client_id=client.id) }}"
-                  class="btn btn-primary btn-sm me-1">
-                  Info
-                </a>
-                <a href="{{ url_for('client.client_history', client_id=client.id) }}"
-                  class="btn btn-info btn-sm me-1">
-                  Histórico
-                </a>
-                <a href="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}"
-                  class="btn btn-secondary btn-sm me-1">
-                  Contabilidade
-                </a>
-                <a href="{{ url_for('client.share_client', client_id=client.id) }}"
-                  class="btn btn-info btn-sm me-1">
-                  Partilhar
-                </a>
-                <form action="{{ url_for('client.delete_client', client_id=client.id) }}"
-                      method="post"
-                      class="d-inline-block me-1"
-                      onsubmit="return confirm('Tem certeza que deseja excluir este cliente?');">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-danger btn-sm">
-                    Excluir
-                  </button>
-                </form>
-              </div>
+  <div class="table-responsive" style="max-height: 70vh;">
+    <table class="table table-hover align-middle" id="clientesTable">
+      <thead class="table-light position-sticky top-0">
+        <tr>
+          <th>Nome</th>
+          <th>
+            <a href="{{ url_for('client.clientes', 
+                page=1, 
+                q=search, 
+                prefix=prefix, 
+                nif=nif,
+                order='desc' if order != 'desc' else 'asc'
+              ) }}"
+              style="text-decoration:none; color:inherit; display:inline-flex; align-items:center"
+              title="Ordenar por número interno">
+              Número Interno
+              {% if order == 'asc' %}
+                <span style="font-size:1.1em; margin-left:4px;">▲</span>
+              {% else %}
+                <span style="font-size:1.1em; margin-left:4px;">▼</span>
+              {% endif %}
+            </a>
+          </th>
+          <th>Email</th>
+          <th>Telefone</th>
+          <th style="min-width:220px;">Ações</th>
+        </tr>
+      </thead>
+      <tbody id="clientesTbody">
+        {% for client in clients %}
+        <tr>
+          <td>{{ client.name }}</td>
+          <td>{{ client.number_interno or '-' }}</td>
+          <td>{{ client.email or '-' }}</td>
+          <td>{{ client.telephone or '-' }}</td>
+          <td>
+            <div class="d-flex flex-wrap gap-1">
+              <a href="{{ url_for('client.client_info', client_id=client.id) }}"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip" title="Info">
+                <i class="fa-solid fa-circle-info"></i>
+              </a>
+              <a href="{{ url_for('client.client_history', client_id=client.id) }}"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip" title="Histórico">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+              </a>
+              <a href="{{ url_for('accounting.contabilidade_cliente', client_id=client.id) }}"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip" title="Contabilidade">
+                <i class="fa-solid fa-coins"></i>
+              </a>
+              <a href="{{ url_for('client.share_client', client_id=client.id) }}"
+                class="btn btn-outline-secondary btn-sm"
+                data-bs-toggle="tooltip" title="Partilhar">
+                <i class="fa-solid fa-share-nodes"></i>
+              </a>
+              <form action="{{ url_for('client.delete_client', client_id=client.id) }}"
+                    method="post"
+                    class="d-inline"
+                    onsubmit="return confirm('Tem certeza que deseja excluir este cliente?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm" data-bs-toggle="tooltip" title="Excluir">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </form>
             </div>
-          </div>
-
-        </div>
-      </div>
-    {% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
-  
-  <!-- Controles de paginação -->
+  <!-- Paginação -->
   {% if pagination.pages > 1 %}
     <nav aria-label="Page navigation" class="mt-4">
       <ul class="pagination justify-content-center">
         {% if pagination.has_prev %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('client.clientes', page=pagination.prev_num, q=search) }}">Anterior</a>
+            <a class="page-link" href="{{ url_for('client.clientes', page=pagination.prev_num, q=search, order=order, prefix=prefix) }}">Anterior</a>
           </li>
         {% else %}
           <li class="page-item disabled"><span class="page-link">Anterior</span></li>
@@ -84,7 +111,9 @@
             {% if page == pagination.page %}
               <li class="page-item active"><span class="page-link">{{ page }}</span></li>
             {% else %}
-              <li class="page-item"><a class="page-link" href="{{ url_for('client.clientes', page=page, q=search) }}">{{ page }}</a></li>
+              <li class="page-item">
+                <a class="page-link" href="{{ url_for('client.clientes', page=page, q=search, order=order, prefix=prefix) }}">{{ page }}</a>
+              </li>
             {% endif %}
           {% else %}
             <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -92,7 +121,7 @@
         {% endfor %}
         {% if pagination.has_next %}
           <li class="page-item">
-            <a class="page-link" href="{{ url_for('client.clientes', page=pagination.next_num, q=search) }}">Próximo</a>
+            <a class="page-link" href="{{ url_for('client.clientes', page=pagination.next_num, q=search, order=order, prefix=prefix) }}">Próximo</a>
           </li>
         {% else %}
           <li class="page-item disabled"><span class="page-link">Próximo</span></li>
@@ -101,4 +130,15 @@
     </nav>
   {% endif %}
 </div>
+{% endblock %} 
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+      new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  });
+</script>
 {% endblock %}
