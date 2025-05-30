@@ -4,15 +4,95 @@
 
 {% block content %}
   <h2>Criar Assunto</h2>
-  <form method="post">
+  <form method="post" id="assunto-form">
     {{ form.hidden_tag() }}
-    {{ render_field(form.client_existing) }}
-    {{ render_field(form.client_new) }}
+    <!-- Explicitly include client_existing to ensure it’s sent -->
+    <input type="hidden" id="client-existing-hidden" name="client_existing" value="{{ form.client_existing.data or '' }}" class="client-existing-hidden">
+
+    <div class="mb-3">
+      <label for="client-autocomplete" class="form-label">Cliente</label>
+      <select id="client-autocomplete" name="client-autocomplete" style="width:100%">
+        <option value=""></option>
+      </select>
+      {% for err in form.client_existing.errors %}
+        <div class="invalid-feedback d-block">{{ err }}</div>
+      {% endfor %}
+    </div>
+
     {{ render_field(form.title) }}
+    {{ render_field(form.description) }}
     {{ render_field(form.due_date) }}
-    {{ render_field(form.sort_order) }}
-    {{ render_field(form.shared_with) }}
-    {{ form.submit(class="btn btn-primary") }}
+    {{ form.submit() }}
   </form>
-  <p><a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">Voltar</a></p>
+
+  <p>
+    <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">
+      Voltar
+    </a>
+  </p>
+{% endblock %}
+
+{% block extra_css %}
+  {{ super() }}
+  <!-- Select2 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
+    rel="stylesheet"
+  />
+{% endblock %}
+
+{% block extra_js %}
+  {{ super() }}
+  <!-- jQuery e Select2 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script>
+    $(function() {
+      console.log('Inicializando Select2...');
+      $('#client-autocomplete').select2({
+        placeholder: 'Pesquisar cliente por nome, NIF ou interno',
+        allowClear: true,
+        minimumInputLength: 2,
+        ajax: {
+          url: "{{ url_for('client.autocomplete_clientes') }}",
+          dataType: 'json',
+          delay: 250,
+          data: params => ({ q: params.term }),
+          processResults: data => {
+            console.log('Resultados recebidos:', data);
+            return { results: data.results };
+          },
+          error: (xhr, status, err) => {
+            console.error('Select2 AJAX erro:', status, err);
+          }
+        }
+      });
+
+      $('#client-autocomplete').on('select2:select', function(e) {
+        const selectedId = e.params.data.id;
+        console.log('Cliente selecionado:', e.params.data);
+        $('#client-existing-hidden').val(selectedId);
+        console.log('Valor do campo oculto:', $('#client-existing-hidden').val());
+      });
+
+      $('#client-autocomplete').on('select2:unselect', function(e) {
+        $('#client-existing-hidden').val('');
+        console.log('Cliente desselecionado, campo oculto:', $('#client-existing-hidden').val());
+      });
+
+      $('#assunto-form').on('submit', function(e) {
+        const clientValue = $('#client-existing-hidden').val();
+        console.log('Formulário submetido, client_existing:', clientValue);
+        if (!clientValue) {
+          console.warn('Nenhum cliente selecionado ao submeter!');
+          alert('Por favor, selecione um cliente antes de salvar.');
+          e.preventDefault();
+          return false;
+        }
+        // Force sync with form data before submission
+        $('input[name="client_existing"]').val(clientValue);
+        console.log('Valor forçado no campo oculto:', $('input[name="client_existing"]').val());
+      });
+    });
+  </script>
 {% endblock %}

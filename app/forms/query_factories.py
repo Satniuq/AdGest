@@ -9,14 +9,27 @@ def clientes_query():
     return Client.query.order_by(Client.name).all()
 
 def user_clients_query():
-    """Retorna clientes onde current_user é responsável."""
-    from app.clientes.models import Client
-    return (
-        Client.query
-        .filter(Client.user_id == current_user.id)
-        .order_by(Client.name)
-        .all()
-    )
+    """
+    Retorna clientes onde current_user é responsável, 
+    clientes partilhados consigo e clientes públicos.
+    """
+    from app.clientes.models import Client, ClientShare
+    from sqlalchemy import or_
+
+    user_id = current_user.id
+
+    # Clientes do próprio user
+    own = Client.query.filter(Client.user_id == user_id)
+    # Clientes partilhados (ClientShare)
+    shared = Client.query.join(ClientShare, Client.id == ClientShare.client_id)\
+                         .filter(ClientShare.user_id == user_id)
+    # Clientes públicos
+    public = Client.query.filter(Client.is_public.is_(True))
+
+    # União dos três conjuntos
+    # DISTINCT para não mostrar duplicados se por acaso houver overlaps
+    query = own.union(shared).union(public).order_by(Client.name).distinct(Client.id)
+    return query.all()
 
 def usuarios_query():
     """Retorna advogados ativos."""

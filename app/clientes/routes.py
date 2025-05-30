@@ -4,7 +4,7 @@ import csv, unicodedata, json
 from io import StringIO
 from flask import (
     Blueprint, render_template, redirect, url_for, flash,
-    request, session, current_app
+    request, session, current_app, jsonify
 )
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -271,3 +271,37 @@ def client_history(client_id):
         prazo_comment_form=CommentForm(),
         tarefa_comment_form=CommentForm()
     )
+
+@clientes_bp.route('/api/clientes/autocomplete')
+@login_required
+def autocomplete_clientes():
+    q = request.args.get('q', '').strip()
+    user_id = current_user.id
+
+    if not q or len(q) < 2:
+        return jsonify(results=[])
+
+    query = (
+        Client.query
+        .outerjoin(ClientShare, Client.id == ClientShare.client_id)
+        .filter(
+            or_(
+                Client.user_id == user_id,
+                ClientShare.user_id == user_id,
+                Client.is_public == True
+            ),
+            or_(
+                Client.name.ilike(f"%{q}%"),
+                Client.nif.ilike(f"%{q}%"),
+                Client.number_interno.ilike(f"%{q}%")
+            )
+        )
+        .order_by(Client.name)
+        .limit(15)
+    )
+
+    results = [
+        {"id": c.id, "text": f"{c.name} ({c.nif or ''})"}
+        for c in query
+    ]
+    return jsonify(results=results)

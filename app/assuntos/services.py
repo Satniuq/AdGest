@@ -98,13 +98,7 @@ class AssuntoService:
         # só importamos Client quando precisamos
         from app.clientes.models import Client
 
-        # 1) resolve cliente
-        if data.get("client_existing"):
-            client = data["client_existing"]
-        else:
-            client = Client(user_id=user.id, name=data["client_new"].strip())
-            db.session.add(client)
-            db.session.commit()
+        client = data["client_existing"]
 
         # 2) cria Assunto
         a = Assunto(
@@ -150,15 +144,7 @@ class AssuntoService:
         a.description = data.get("description")
         a.due_date    = data.get("due_date")
         a.sort_order  = data.get("sort_order", 0)
-
-        # 3) atualiza cliente
-        if data.get("client_existing"):
-            a.client_id = data["client_existing"].id
-        else:
-            cli = Client(user_id=user.id, name=data["client_new"].strip())
-            db.session.add(cli)
-            db.session.commit()
-            a.client_id = cli.id
+        a.client_id   = data["client_existing"].id
 
         # 5) calcula diff e grita histórico/notify
         new = {

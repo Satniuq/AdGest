@@ -3,7 +3,8 @@
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, DecimalField, DateField,
-    SelectField, TextAreaField, SubmitField
+    SelectField, TextAreaField, SubmitField,
+    HiddenField
 )
 from wtforms.validators import DataRequired, Optional, Length
 from wtforms_sqlalchemy.fields import (
@@ -80,11 +81,9 @@ class ProcessoForm(FlaskForm):
         validators=[Optional()]
     )
 
-    client = QuerySelectField(
-        'Cliente',
-        query_factory=lambda: [],  # será injetado em __init__
-        get_label='name',
-        validators=[DataRequired()]
+    client_existing = HiddenField(
+        'Cliente Existente',
+        validators=[Optional()]
     )
 
     opposing_party = StringField(
@@ -133,26 +132,37 @@ class ProcessoForm(FlaskForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Importar aqui para evitar circular imports
-        from app.forms.query_factories import clientes_query, usuarios_query
+        # Importações locais para evitar circular imports
+        from app.forms.query_factories import usuarios_query
         from app.processos.services import ProcessoService
 
-        # população dinâmica dos selects
-        self.client.query_factory        = clientes_query
+        # Atualiza dinamicamente os factories
         self.lead_attorney.query_factory = usuarios_query
-        self.co_counsel.query_factory    = usuarios_query
+        self.co_counsel.query_factory = usuarios_query
 
-        self.case_type.query_factory     = lambda: CaseType.query.order_by(CaseType.name).all()
+        self.case_type.query_factory = lambda: CaseType.query.order_by(CaseType.name).all()
         self.practice_area.query_factory = lambda: PracticeArea.query.order_by(PracticeArea.name).all()
-        self.court.query_factory         = lambda: Court.query.order_by(Court.name).all()
-        self.tags.query_factory          = lambda: Tag.query.order_by(Tag.name).all()
+        self.court.query_factory = lambda: Court.query.order_by(Court.name).all()
+        self.tags.query_factory = lambda: Tag.query.order_by(Tag.name).all()
 
-        # fases dependem do case_type selecionado
+        # Ajusta fases conforme case_type selecionado
         if self.case_type.data:
             ct_id = self.case_type.data.id
             self.phase.query_factory = lambda: ProcessoService.list_phases(ct_id)
         else:
             self.phase.query_factory = lambda: []
+
+    def validate(self, extra_validators=None):
+        valid = super().validate(extra_validators)
+        if not valid:
+            return False
+
+        if not self.client_existing.data:
+            self.client_existing.errors.append('Selecione um cliente existente.')
+            return False
+
+        return True
+
 
 class ShareProcessForm(FlaskForm):
     """Seleciona usuários com quem compartilhar este processo."""

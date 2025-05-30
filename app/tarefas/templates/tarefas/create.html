@@ -20,12 +20,6 @@
     {{ render_field(form.title) }}
     {{ render_field(form.description) }}
     {{ render_field(form.due_date) }}
-    {{ render_field(form.sort_order) }}
-    {{ render_field(form.hours_estimate) }}
-    {{ render_field(form.status) }}
-    {{ render_field(form.reminder_offset) }}
-    {{ render_field(form.recurrence_rule) }}
-    {{ render_field(form.shared_with) }}
 
     {# Campos ocultos (já vêm de form.hidden_tag, mas caso precise) #}
     {{ form.calendar_event_id() }}

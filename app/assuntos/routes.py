@@ -1,7 +1,7 @@
 # app/assuntos/routes.py
 from flask import (
     render_template, redirect, url_for,
-    flash, request, jsonify, abort
+    flash, request, jsonify, abort, current_app
 )
 from flask_wtf import FlaskForm
 from flask_login import login_required, current_user
@@ -28,24 +28,44 @@ def list_assuntos():
         csrf_form=csrf_form
     )
 
-@assuntos_bp.route('/create', methods=['GET','POST'])
+
+@assuntos_bp.route('/create', methods=['GET', 'POST'])
 @login_required
 def create():
+    from app.clientes.models import Client
     form = AssuntoForm()
+    if request.method == 'POST':
+        current_app.logger.debug(f"Request form data: {dict(request.form)}")
+        current_app.logger.debug(f"Form data: {form.data}")
+        current_app.logger.debug(f"Raw client_existing: {form.client_existing.data}")
+        current_app.logger.debug(f"Request client_existing: {request.form.get('client_existing')}")
+        current_app.logger.debug(f"Form errors: {form.errors}")
+    
     if form.validate_on_submit():
-        data = {
-            "title":           form.title.data,
-            "description":     form.description.data,
-            "client_existing": form.client_existing.data,
-            "client_new":      form.client_new.data,
-            "due_istdate":        form.due_date.data,
-            "sort_order":      form.sort_order.data,
-            "shared_with":     list(form.shared_with.data)
-        }
-        AssuntoService.create(data, current_user)
-        flash('Assunto criado com sucesso!', 'success')
-        return redirect(url_for('dashboard.dashboard'))
-    return render_template('assuntos/create.html', form=form)
+        client_id = form.client_existing.data
+        current_app.logger.debug(f"Client ID from form: {client_id}")
+        try:
+            client_instance = Client.query.get_or_404(int(client_id))
+            data = {
+                "title": form.title.data,
+                "description": form.description.data,
+                "client_existing": client_instance,
+                "due_date": form.due_date.data,
+            }
+            AssuntoService.create(data, current_user)
+            flash('Assunto criado com sucesso!', 'success')
+            return redirect(url_for('dashboard.dashboard'))
+        except ValueError as e:
+            current_app.logger.error(f"Erro ao converter client_id: {e}")
+            flash('ID do cliente inválido. Por favor, selecione um cliente válido.', 'danger')
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar cliente: {e}")
+            flash('Erro ao processar cliente. Tente novamente.', 'danger')
+    else:
+        current_app.logger.debug(f"Validação falhou, erros: {form.errors}")
+    
+    return render_template('assuntos/create.html', form=form)   
+
 
 @assuntos_bp.route('/<int:id>/edit', methods=['GET','POST'])
 @login_required

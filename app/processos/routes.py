@@ -1,6 +1,6 @@
 #app/processos/routes.py
 from datetime import datetime
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import render_template, redirect, url_for, flash, request, jsonify, current_app
 from flask_login import login_required, current_user
 from flask_wtf import FlaskForm
 from wtforms import TextAreaField, SubmitField
@@ -175,48 +175,74 @@ def detail_process(processo_id):
 @processos_bp.route('/create', methods=['GET','POST'])
 @login_required
 def create_process():
-    from app.clientes.models import Client
     form = ProcessoForm()
 
-    # 1) Injeta todos os query_factories estáticos
+    # factories dinâmicos carregados no __init__ do form
     from app.forms.query_factories import usuarios_query, clientes_query
-    form.client.query_factory        = clientes_query
+    form.lead_attorney.query_factory = usuarios_query
+    form.co_counsel.query_factory    = usuarios_query
     form.case_type.query_factory     = ProcessoService.list_case_types
     form.practice_area.query_factory = ProcessoService.list_practice_areas
     form.court.query_factory         = ProcessoService.list_courts
-    form.lead_attorney.query_factory = usuarios_query
-    form.co_counsel.query_factory    = usuarios_query
     form.tags.query_factory          = ProcessoService.list_tags
 
-    # 2) Repopula o factory de 'phase' com base no case_type selecionado
-    #    Isto deve vir antes do validate_on_submit!
+    # Log form data for debugging
+    if request.method == 'POST':
+        current_app.logger.debug(f"Request form data: {dict(request.form)}")
+        current_app.logger.debug(f"Form data: {form.data}")
+        current_app.logger.debug(f"Raw client_existing: {form.client_existing.data}")
+        current_app.logger.debug(f"Request client_existing: {request.form.get('client_existing')}")
+        current_app.logger.debug(f"Form errors: {form.errors}")
+
+    # factories dinâmicos carregados no __init__ do form
+    from app.forms.query_factories import usuarios_query, clientes_query
+    form.lead_attorney.query_factory = usuarios_query
+    form.co_counsel.query_factory    = usuarios_query
+    form.case_type.query_factory     = ProcessoService.list_case_types
+    form.practice_area.query_factory = ProcessoService.list_practice_areas
+    form.court.query_factory         = ProcessoService.list_courts
+    form.tags.query_factory          = ProcessoService.list_tags
+
+    # Fases conforme case_type selecionado (antes do validate)
     if form.case_type.data:
         ct_id = form.case_type.data.id
         form.phase.query_factory = lambda: ProcessoService.list_phases(ct_id)
     else:
         form.phase.query_factory = lambda: []
 
-    # 3) Valida e, se OK, cria chamando create(data, user_id)
     if form.validate_on_submit():
-        data = {
-            'external_id'       : form.external_id.data or None,
-            'case_type_id'      : form.case_type.data.id if form.case_type.data else None,
-            'phase_id'          : form.phase.data.id if form.phase.data else None,
-            'practice_area_id'  : form.practice_area.data.id,
-            'court_id'          : form.court.data.id,
-            'lead_attorney_id'  : form.lead_attorney.data.id,
-            'client_id'         : form.client.data.id,
-            'status'            : form.status.data,
-            'opposing_party'    : form.opposing_party.data,
-            'value_estimate'    : form.value_estimate.data,
-            'opened_at'         : form.opened_at.data or datetime.utcnow(),
-            'closed_at'         : form.closed_at.data,
-            'co_counsel_ids'    : [u.id for u in form.co_counsel.data],
-            'tag_ids'           : [t.id for t in form.tags.data],
-        }
-        proc = ProcessoService.create(data, current_user.id)
-        flash('Processo criado com sucesso.', 'success')
-        return redirect(url_for('processos.detail_process', processo_id=proc.id))
+        current_app.logger.debug(f"Client ID from form: {form.client_existing.data}")
+        try:
+            client_id = int(form.client_existing.data)
+            from app.clientes.models import Client
+            client_instance = Client.query.get_or_404(client_id)
+            data = {
+                'external_id'       : form.external_id.data or None,
+                'case_type_id'      : form.case_type.data.id if form.case_type.data else None,
+                'phase_id'          : form.phase.data.id if form.phase.data else None,
+                'practice_area_id'  : form.practice_area.data.id,
+                'court_id'          : form.court.data.id,
+                'lead_attorney_id'  : form.lead_attorney.data.id,
+                'client_id'         : client_id,
+                'status'            : form.status.data,
+                'opposing_party'    : form.opposing_party.data,
+                'value_estimate'    : form.value_estimate.data,
+                'opened_at'         : form.opened_at.data or datetime.utcnow(),
+                'closed_at'         : form.closed_at.data,
+                'co_counsel_ids'    : [u.id for u in form.co_counsel.data],
+                'tag_ids'           : [t.id for t in form.tags.data],
+            }
+            proc = ProcessoService.create(data, current_user.id)
+            flash('Processo criado com sucesso.', 'success')
+            return redirect(url_for('processos.detail_process', processo_id=proc.id))
+        except ValueError as e:
+            current_app.logger.error(f"Erro ao converter client_id: {e}")
+            flash('ID do cliente inválido. Por favor, selecione um cliente válido.', 'danger')
+        except Exception as e:
+            current_app.logger.error(f"Erro ao buscar cliente: {e}")
+            flash('Erro ao processar cliente. Tente novamente.', 'danger')
+    else:
+        current_app.logger.debug(f"Validação falhou, erros: {form.errors}")
 
     return render_template('processos/create.html', form=form)
 
@@ -224,31 +250,26 @@ def create_process():
 @processos_bp.route('/<int:processo_id>/edit', methods=['GET','POST'])
 @login_required
 def edit_process(processo_id):
-    from app.clientes.models import Client
-    # 1) Carrega o processo existente
     proc = ProcessoService.get(processo_id)
-    # 2) Instancia o form com os dados do objeto
     form = ProcessoForm(obj=proc)
 
-    # 3) Injeta todos os query_factories estáticos
+    # popula hidden com cliente existente
+    form.client_existing.data = proc.client_id
+
     from app.forms.query_factories import usuarios_query, clientes_query
-    form.client.query_factory        = clientes_query
+    form.lead_attorney.query_factory = usuarios_query
+    form.co_counsel.query_factory    = usuarios_query
     form.case_type.query_factory     = ProcessoService.list_case_types
     form.practice_area.query_factory = ProcessoService.list_practice_areas
     form.court.query_factory         = ProcessoService.list_courts
-    form.lead_attorney.query_factory = usuarios_query
-    form.co_counsel.query_factory    = usuarios_query
     form.tags.query_factory          = ProcessoService.list_tags
 
-    # 4) Repopula o factory de 'phase' com base no case_type atual
-    #    Isto deve vir antes do validate_on_submit!
     if form.case_type.data:
         ct_id = form.case_type.data.id
         form.phase.query_factory = lambda: ProcessoService.list_phases(ct_id)
     else:
         form.phase.query_factory = lambda: []
 
-    # 5) Valida e, se OK, atualiza chamando update(proc, data, user_id)
     if form.validate_on_submit():
         data = {
             'external_id'       : form.external_id.data or None,
@@ -257,7 +278,7 @@ def edit_process(processo_id):
             'practice_area_id'  : form.practice_area.data.id,
             'court_id'          : form.court.data.id,
             'lead_attorney_id'  : form.lead_attorney.data.id,
-            'client_id'         : form.client.data.id,
+            'client_id'         : int(form.client_existing.data),
             'status'            : form.status.data,
             'opposing_party'    : form.opposing_party.data,
             'value_estimate'    : form.value_estimate.data,
@@ -275,6 +296,7 @@ def edit_process(processo_id):
         form=form,
         processo=proc
     )
+
 
 @processos_bp.route('/<int:processo_id>/delete', methods=['POST'])
 @login_required
