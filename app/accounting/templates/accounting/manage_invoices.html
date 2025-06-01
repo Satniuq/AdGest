@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Contabilidade{% endblock %}
 
+{% block extra_css %}
+  {{ super() }}
+  <!-- Select2 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css"
+    rel="stylesheet"
+  />
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
 
@@ -248,4 +257,48 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+  {{ super() }}
+  <!-- jQuery e Select2 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script>
+    // Inicializa o Select2 assim que o collapse for mostrado:
+    $('#collapseInserir').on('shown.bs.collapse', function () {
+      if (!$('#client-autocomplete').hasClass('select2-hidden-accessible')) {
+        $('#client-autocomplete').select2({
+          placeholder: 'Pesquisar cliente por nome, NIF ou interno',
+          allowClear: true,
+          minimumInputLength: 2,
+          ajax: {
+            url: "{{ url_for('client.autocomplete_clientes') }}",
+            dataType: 'json',
+            delay: 250,
+            data: params => ({ q: params.term }),
+            processResults: data => ({ results: data.results }),
+            error: (xhr, status, err) => console.error('Erro Select2 AJAX:', status, err)
+          }
+        });
+        $('#client-autocomplete').on('select2:select', function(e) {
+          $('#client-existing-hidden').val(e.params.data.id);
+        });
+        $('#client-autocomplete').on('select2:clear', function() {
+          $('#client-existing-hidden').val('');
+        });
+      }
+    });
+
+    // Validação ao submeter o formulário:
+    $('form').on('submit', function(e) {
+      const clientValue = $('#client-existing-hidden').val();
+      if (!clientValue) {
+        alert('Por favor, selecione um cliente antes de salvar.');
+        e.preventDefault();
+        return false;
+      }
+      $('input[name="client_existing"]').val(clientValue);
+    });
+  </script>
 {% endblock %}

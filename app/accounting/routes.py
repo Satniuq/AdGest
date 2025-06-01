@@ -118,9 +118,19 @@ def manage_invoices():
 @login_required
 def add_invoice():
     form = InvoiceForm()
+    current_app.logger.debug(f"Request form data: {dict(request.form)}")
+    current_app.logger.debug(f"Form data: {form.data}")
+    current_app.logger.debug(f"Raw client_existing: {form.client_existing.data}")
+    current_app.logger.debug(f"Form errors: {form.errors}")
     if form.validate_on_submit():
         try:
-            DocumentoService.create_from_form(form, current_user)
+            client_id = form.client_existing.data
+            current_app.logger.debug(f"Client ID from form: {client_id}")
+            if not client_id:
+                flash('Selecione um cliente.', 'danger')
+                return manage_invoices()
+            client = Client.query.get_or_404(int(client_id))
+            DocumentoService.create_from_form(form, current_user, client)
             flash('Documento inserido com sucesso!', 'success')
             return redirect(url_for('accounting.manage_invoices'))
         except (DuplicateClientError, InvalidDocumentTypeError) as e:
@@ -131,6 +141,7 @@ def add_invoice():
     else:
         flash(f"Erros no formulário: {form.errors}", 'danger')
     return manage_invoices()
+
 
 
 @accounting.route('/api/clientes')
@@ -197,15 +208,12 @@ def confirm_csv_import(tmp_id):
 @accounting.route('/contabilidade_cliente/<int:client_id>')
 @login_required
 def contabilidade_cliente(client_id):
-    # 1) Verifica permissão
+    # 1) Busca apenas se existe o cliente (sem verificação de permissão)
     client = ClienteRepo.get(client_id)
-    if not client or not (
-        client.user_id == current_user.id or
-        client.shared_with.filter_by(id=current_user.id).first() or
-        client.shares.filter_by(user_id=current_user.id).first()
-    ):
-        flash("Sem permissão ou cliente não encontrado.", "danger")
+    if not client:
+        flash("Cliente não encontrado.", "danger")
         return redirect(url_for('accounting.manage_invoices'))
+
 
     # 2) Instancia o form de filtros (InvoiceForm possui os campos tipo, data_emissao e status que usamos no template)
     invoice_form = InvoiceForm(request.args)

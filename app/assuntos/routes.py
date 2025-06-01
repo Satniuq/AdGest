@@ -66,7 +66,6 @@ def create():
     
     return render_template('assuntos/create.html', form=form)   
 
-
 @assuntos_bp.route('/<int:id>/edit', methods=['GET','POST'])
 @login_required
 def edit(id):
@@ -74,24 +73,27 @@ def edit(id):
     if not (current_user.id==a.owner_id or current_user in a.shared_with):
         abort(403)
     form = AssuntoForm(obj=a)
-    # se for GET (primeiro carregamento), pré-seleciona o cliente existente
+    # se for GET (primeiro carregamento), pré-seleciona o cliente existente (id!)
     if request.method == 'GET':
-        form.client_existing.data = a.client
-        
+        form.client_existing.data = a.client_id
+
     if form.validate_on_submit():
         data = {
-            "title":           form.title.data,
-            "description":     form.description.data,
-            "client_existing": form.client_existing.data,
-            "client_new":      form.client_new.data,
-            "due_date":        form.due_date.data,
-            "sort_order":      form.sort_order.data,
-            "shared_with":     list(form.shared_with.data)
+            "title":       form.title.data,
+            "description": form.description.data,
+            "due_date":    form.due_date.data,
+            "client_id":   int(form.client_existing.data),   # usa sempre o id!
         }
         AssuntoService.update(a, data, current_user)
         flash('Assunto atualizado com sucesso!', 'success')
         return redirect(url_for('dashboard.dashboard'))
-    return render_template('assuntos/edit.html', form=form, assunto=a)
+    return render_template(
+        'assuntos/edit.html',
+        form=form,
+        assunto=a,
+        cliente=a.client  # só para mostrar o nome no template
+    )
+
 
 @assuntos_bp.route('/<int:id>/toggle', methods=['POST'])
 @login_required

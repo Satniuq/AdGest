@@ -21,13 +21,12 @@ class InvalidDocumentTypeError(Exception): pass
 
 class DocumentoService:
     @staticmethod
-    def create_from_form(form, user):
+    def create_from_form(form, user, client):
         """
         Cria um DocumentoContabilistico a partir do form, atribui o Client existente,
         valida tipo, guarda doc e associa notas.
         """
-        # 1) Cliente existente
-        client = form.client_existing.data
+        # 1) Cliente existente (já recebido como argumento)
         if not client:
             raise DuplicateClientError("Selecione um cliente existente.")
 
@@ -60,6 +59,7 @@ class DocumentoService:
             BillingNotaRepo.save(nota)
 
         return doc
+
     
     @staticmethod
     def apply_filters_manage(query, params):

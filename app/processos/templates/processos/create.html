@@ -74,37 +74,12 @@
         {% for e in form.lead_attorney.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
       </div>
 
-      <!-- Co-Advogados -->
-      <div class="col-md-4">
-        {{ form.co_counsel.label(class_='form-label') }}
-        {{ form.co_counsel(class_='form-select select2', multiple=True, **{'data-live-search':'true'}) }}
-        {% for e in form.co_counsel.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-      </div>
 
       <!-- Parte Adversa -->
       <div class="col-md-6">
         {{ form.opposing_party.label(class_='form-label') }}
         {{ form.opposing_party(class_='form-control', id='opposing_party', rows='3', placeholder='Separe as partes por vírgula') }}
         {% for e in form.opposing_party.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-      </div>
-
-      <!-- Valor Estimado -->
-      <div class="col-md-6">
-        {{ form.value_estimate.label(class_='form-label') }}
-        {{ form.value_estimate(class_='form-control') }}
-        {% for e in form.value_estimate.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-      </div>
-
-      <!-- Datas -->
-      <div class="col-md-4">
-        {{ form.opened_at.label(class_='form-label') }}
-        {{ form.opened_at(class_='form-control', type='date') }}
-        {% for e in form.opened_at.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-      </div>
-      <div class="col-md-4">
-        {{ form.closed_at.label(class_='form-label') }}
-        {{ form.closed_at(class_='form-control', type='date') }}
-        {% for e in form.closed_at.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
       </div>
 
       <!-- Status -->
@@ -114,13 +89,6 @@
         {% for e in form.status.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
       </div>
 
-      <!-- Etiquetas -->
-      <div class="col-12">
-        {{ form.tags.label(class_='form-label') }}
-        {{ form.tags(class_='form-select select2', multiple=True, **{'data-live-search':'true'}) }}
-        {% for e in form.tags.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-      </div>
-    </div>
 
     <div class="mt-4">
       <button type="submit" class="btn btn-success">

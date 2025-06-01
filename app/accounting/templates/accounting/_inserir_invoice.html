@@ -6,8 +6,11 @@
 
       <!-- Cliente existente -->
       <div class="mb-3">
-        {{ invoice_form.client_existing.label(class="form-label") }}
-        {{ invoice_form.client_existing(class="form-select") }}
+        <label for="client-autocomplete" class="form-label">Cliente</label>
+        <!-- Campo hidden para o WTForms -->
+        <input type="hidden" id="client-existing-hidden" name="client_existing" value="{{ invoice_form.client_existing.data or '' }}">
+        <!-- Select2 AJAX dropdown -->
+        <select id="client-autocomplete" name="client-autocomplete" style="width:100%"></select>
         {% if invoice_form.client_existing.errors %}
           <div class="invalid-feedback d-block">
             {{ invoice_form.client_existing.errors[0] }}

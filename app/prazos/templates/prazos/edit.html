@@ -28,20 +28,21 @@
         {% endfor %}
       </div>
 
+      
+      {# Título #}
+      <div class="col-12">
+        {{ form.description.label(class_='form-label') }}
+        {{ form.description(class_='form-control', placeholder='Descrição sucinta do prazo') }}
+        {% for err in form.description.errors %}
+          <div class="text-danger small">{{ err }}</div>
+        {% endfor %}
+      </div>
+
       {# Tipo de Prazo #}
       <div class="col-md-4">
         {{ form.deadline_type.label(class_='form-label') }}
         {{ form.deadline_type(class_='form-select') }}
         {% for err in form.deadline_type.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-
-      {# Recorrência #}
-      <div class="col-md-4">
-        {{ form.recurrence_rule.label(class_='form-label') }}
-        {{ form.recurrence_rule(class_='form-select') }}
-        {% for err in form.recurrence_rule.errors %}
           <div class="text-danger small">{{ err }}</div>
         {% endfor %}
       </div>
@@ -55,42 +56,6 @@
         {% endfor %}
       </div>
 
-      {# Descrição #}
-      <div class="col-12">
-        {{ form.description.label(class_='form-label') }}
-        {{ form.description(class_='form-control', placeholder='Descrição sucinta do prazo') }}
-        {% for err in form.description.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-
-      {# Comentários #}
-      <div class="col-12">
-        {{ form.comments.label(class_='form-label') }}
-        {{ form.comments(class_='form-control', placeholder='Observações adicionais (opcional)') }}
-        {% for err in form.comments.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-
-      {# Horas Gastas #}
-      <div class="col-md-4">
-        {{ form.hours_spent.label(class_='form-label') }}
-        {{ form.hours_spent(class_='form-control', step='0.1') }}
-        {% for err in form.hours_spent.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-
-      {# Status #}
-      <div class="col-md-4">
-        {{ form.status.label(class_='form-label') }}
-        {{ form.status(class_='form-select') }}
-        {% for err in form.status.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-    </div>
 
     <div class="mt-4">
       {{ form.submit(class_='btn btn-primary') }}

@@ -128,8 +128,6 @@ class AssuntoService:
 
     @staticmethod
     def update(a: Assunto, data, user):
-        from app.clientes.models import Client
-
         # 1) snapshot antes
         old = {
             "title":       a.title,
@@ -144,9 +142,9 @@ class AssuntoService:
         a.description = data.get("description")
         a.due_date    = data.get("due_date")
         a.sort_order  = data.get("sort_order", 0)
-        a.client_id   = data["client_existing"].id
+        a.client_id   = data["client_id"]  # sempre um inteiro
 
-        # 5) calcula diff e grita histórico/notify
+        # 3) histórico/notify
         new = {
             "title":       a.title,
             "description": a.description,
@@ -163,6 +161,7 @@ class AssuntoService:
             AssuntoService._notify(a, user, "updated")
 
         return a
+
 
     @staticmethod
     def share(a: Assunto, users: List[User], current_user):

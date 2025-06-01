@@ -1,7 +1,7 @@
 # app/billing/routes.py
 
 from flask import render_template, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app.billing import billing_bp
 from app.billing.forms import NotaSearchForm
 from app.billing.services import BillingService
@@ -15,14 +15,17 @@ def list_notas():
     notas = BillingService.search_notas(
         source_type = form.source_type.data or None,
         date_from   = form.date_from.data,
-        date_to     = form.date_to.data
+        date_to     = form.date_to.data,
+        created_by  = current_user.id  # <---- adiciona isto
     )
     return render_template('billing/list.html', form=form, notas=notas)
 
 @billing_bp.route('/<int:nota_id>', methods=['GET'])
 @login_required
 def view_nota(nota_id):
-    nota  = BillingService.get_nota(nota_id)
+    nota = BillingService.get_nota(nota_id)
+    if nota.created_by != current_user.id:
+        abort(403)  # ou retorna uma mensagem de erro/flash
     return render_template('billing/view.html', nota=nota)
 
 @billing_bp.route('/nota/<int:nota_id>/documento/<int:doc_id>')

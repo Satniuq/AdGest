@@ -6,12 +6,14 @@
   <h2>Editar Assunto</h2>
   <form method="post">
     {{ form.hidden_tag() }}
-    {{ render_field(form.client_existing) }}
-    {{ render_field(form.client_new) }}
+    <div class="mb-3">
+      <label class="form-label">Cliente</label>
+      <input type="text" class="form-control" value="{{ cliente.name }}" readonly>
+      <input type="hidden" name="client_existing" value="{{ cliente.id }}">
+    </div>
     {{ render_field(form.title) }}
+    {{ render_field(form.description) }}
     {{ render_field(form.due_date) }}
-    {{ render_field(form.sort_order) }}
-    {{ render_field(form.shared_with) }}
     {{ form.submit(class="btn btn-primary") }}
   </form>
   <p><a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-outline-secondary">Voltar</a></p>

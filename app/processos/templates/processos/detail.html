@@ -82,16 +82,18 @@
 
     {# === Coluna direita: Prazos Associados e Histórico Geral === #}
     <div class="col-md-8">
+
+      {# Botão “Novo Prazo” #}
+      <div class="d-flex justify-content-end mb-2">
+        <a href="{{ url_for('prazos.create_for_processo', processo_id=processo.id) }}" class="btn btn-success">
+          <i class="fa-solid fa-plus"></i> Novo Prazo
+        </a>
+      </div>
+
       <h5 class="mb-3">Prazos Associados</h5>
       
       {# Abas Pendentes / Concluídos #}
       <ul class="nav nav-tabs mb-3" role="tablist">
-        <div class="d-flex justify-content-end mb-2">
-          <a href="{{ url_for('prazos.create_for_processo', processo_id=processo.id) }}" class="btn btn-success">
-            <i class="fa-solid fa-plus"></i> Novo Prazo
-          </a>
-        </div>
-
         <li class="nav-item">
           <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-pendentes">
             Pendentes

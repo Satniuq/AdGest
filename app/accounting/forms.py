@@ -4,7 +4,8 @@ import unicodedata
 from flask_wtf import FlaskForm
 from wtforms import (
     StringField, FloatField, DateField, SelectField,
-    TextAreaField, FileField, SubmitField, ValidationError
+    TextAreaField, FileField, SubmitField, ValidationError,
+    HiddenField
 )
 from flask_wtf.file import FileField, FileRequired, FileAllowed
 from wtforms.validators import DataRequired, Optional
@@ -27,15 +28,8 @@ def user_clients_query():
 
 
 class InvoiceForm(FlaskForm):
-    client_existing = QuerySelectField(
-        'Cliente Existente',
-        query_factory=user_clients_query,
-        get_label='name',
-        allow_blank=True,
-        blank_text="-- Selecione um cliente --",
-        validators=[Optional()]
-    )
-    client_new = StringField('Novo Cliente (caso não haja existente)', validators=[Optional()])
+    # Campo hidden para ID do cliente (preenchido via Select2 AJAX)
+    client_existing = HiddenField('Cliente Existente', validators=[DataRequired(message="Selecione um cliente existente.")])
 
     numero      = StringField('Número', validators=[DataRequired()])
     tipo        = SelectField('Tipo', choices=[
@@ -78,21 +72,15 @@ class InvoiceForm(FlaskForm):
         ok = super().validate(extra_validators)
         if not ok:
             return False
-        if not self.client_existing.data and not (self.client_new.data and self.client_new.data.strip()):
-            msg = 'Selecione um cliente existente ou informe um novo cliente.'
-            self.client_existing.errors.append(msg)
-            self.client_new.errors.append(msg)
+        # Valida obrigatoriedade do cliente
+        if not self.client_existing.data:
+            self.client_existing.errors.append('Selecione um cliente existente.')
             return False
         return True
 
     def validate_data_vencimento(self, field):
         if field.data and self.data_emissao.data and field.data < self.data_emissao.data:
             raise ValidationError('A data de vencimento não pode ser anterior à data de emissão.')
-
-    def build_new_client(self, user_id):
-        # Criar instância de Client diretamente para o serviço
-        from app.clientes.models import Client
-        return Client(user_id=user_id, name=self.client_new.data.strip())
 
 
 class UploadCSVForm(FlaskForm):

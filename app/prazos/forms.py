@@ -43,7 +43,7 @@ class PrazoJudicialForm(FlaskForm):
         validators=[DataRequired()]
     )
     description     = StringField(
-        'Descrição',
+        'Título',
         validators=[DataRequired(), Length(max=255)]
     )
     comments        = TextAreaField(

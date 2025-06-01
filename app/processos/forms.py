@@ -39,8 +39,6 @@ class ProcessoForm(FlaskForm):
         'Tipo de Caso',
         query_factory=lambda: CaseType.query.order_by(CaseType.name).all(),
         get_label='name',
-        allow_blank=True,
-        blank_text='(nenhum)',
         validators=[Optional()]
     )
 
@@ -57,14 +55,19 @@ class ProcessoForm(FlaskForm):
         'Área de Prática',
         query_factory=lambda: PracticeArea.query.order_by(PracticeArea.name).all(),
         get_label='name',
-        validators=[DataRequired()]
+         allow_blank=True,
+        blank_text='(nenhuma)',
+        validators=[Optional()]
     )
+    
 
     court = QuerySelectField(
         'Tribunal',
         query_factory=lambda: Court.query.order_by(Court.name).all(),
         get_label='name',
-        validators=[DataRequired()]
+        allow_blank=True,
+        blank_text='(nenhum)',
+        validators=[Optional()]
     )
 
     lead_attorney = QuerySelectField(
