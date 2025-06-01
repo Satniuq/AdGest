@@ -304,3 +304,67 @@ body.login-page {
   max-height: 300px;    /* se quiser mais altura */
   overflow-x: auto;     /* permitir scroll horizontal */
 }
+
+/* Sobrescreve o bg-primary do Bootstrap para usar a variável --bg-primary */
+.bg-primary {
+  background-color: var(--bg-primary) !important;
+}
+
+/* Em style.css, adicione ao final: */
+.bg-light {
+  background-color: #e0e0e0 !important; /* ex.: cinza médio */
+}
+
+
+/* ===========================================
+   1) Estilo base de todos os quadradinhos de data
+   =========================================== */
+.date-box {
+  display: inline-block;           /* ocupa só o tamanho do texto + padding */
+  padding: 4px 8px;                /* espaço interno confortável */
+  font-size: 0.85rem;              /* fonte um pouco menor */
+  font-weight: 500;                /* peso “seminegrito” */
+  border-radius: 4px;              /* cantos arredondados */
+  border: 1px solid;               /* borda fina; a cor virá das subclasses */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1); /* sombra suave para profundidade */
+  text-align: center;              /* centraliza o texto */
+  min-width: 60px;                 /* largura mínima para caber “DD/MM/YYYY” */
+}
+
+/* ===========================================
+   2) Variantes de cor para cada tipo de data
+   =========================================== */
+
+/* 2.1) Data de HOJE: fundo azul clarinho, texto e borda em azul escuro */
+.date-hoje {
+  background-color: #E8F4FD; /* azul muito suave no fundo */
+  border-color:    #0D6EFD; /* azul do Bootstrap (primary) */
+  color:           #0D6EFD; /* texto no mesmo azul escuro */
+}
+
+/* 2.2) Data de AMANHÃ: fundo amarelo suave, texto e borda em amarelo */
+.date-amanha {
+  background-color: #FFF8E1; /* amarelo bem clarinho */
+  border-color:    #FFC107;  /* amarelo do Bootstrap (warning) */
+  color:           #FFC107;  /* texto amarelo */
+}
+
+/* 2.3) Data de DEPOIS DE AMANHÃ: fundo cinza super claro, texto e borda em cinza */
+.date-depois {
+  background-color: #F5F5F5; /* cinza bem clarinho */
+  border-color:    #6C757D;  /* cinza do Bootstrap */
+  color:           #6C757D;  /* texto cinza */
+}
+
+/* ===========================================
+   3) (Opcional) Ajuste no <li> que contém o cabeçalho de seção
+   =========================================== */
+/* 
+   Se você perceber que o <li> que contém “Hoje”, “Amanhã” etc. 
+   está muito alto após inserir essas caixas, adicione a classe 
+   “cabecalho-secao” ao <li> e use este trecho para reduzir o padding vertical.
+*/
+li.cabecalho-secao {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}

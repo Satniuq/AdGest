@@ -2,7 +2,7 @@
 
 from flask import render_template, Blueprint, jsonify, url_for
 from flask_login import login_required, current_user
-from datetime import date
+from datetime import date, timedelta
 from app.index import index_bp
 from app.dashboard.services import get_overview_data
 
@@ -15,12 +15,42 @@ class CSRFForm(FlaskForm): pass
 @index_bp.route('/', methods=['GET'])
 @login_required
 def index():
+    # Pega todo o contexto que você já gera em get_overview_data()
     data = get_overview_data(current_user)
+
+    # === Cálculo das datas e dias da semana em Português ===
+    hoje = date.today()
+    amanha = hoje + timedelta(days=1)
+    depois = hoje + timedelta(days=2)
+
+    # Mapeamento de weekday() para nomes em Português
+    dias_semana = {
+        0: "Segunda-Feira",
+        1: "Terça-Feira",
+        2: "Quarta-Feira",
+        3: "Quinta-Feira",
+        4: "Sexta-Feira",
+        5: "Sábado",
+        6: "Domingo"
+    }
+    # Formatações
+    data['date_today']      = hoje.strftime('%d/%m/%Y')
+    data['weekday_today']   = dias_semana[hoje.weekday()]
+
+    data['date_tomorrow']   = amanha.strftime('%d/%m/%Y')
+    data['weekday_tomorrow']= dias_semana[amanha.weekday()]
+
+    data['date_day_after']  = depois.strftime('%d/%m/%Y')
+    data['weekday_day_after']= dias_semana[depois.weekday()]
+    # ==========================================================
+
     # instância do form para cada modal de “add hours”
     data['add_hours_form'] = AddPrazoHoursForm()
     # instância genérica só para o csrf_token de qualquer form inline
     data['csrf_form']      = CSRFForm()
+
     return render_template('index/index.html', **data)
+
 
 @index_bp.route('/events')
 @login_required

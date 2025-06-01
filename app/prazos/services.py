@@ -49,12 +49,13 @@ class PrazoService:
                 )
             )
 
-        # filtros originais
+        # filtros específicos de prazo
         if type_id:
             query = query.filter(PrazoJudicial.type_id == type_id)
         if client_id:
             query = query.filter(PrazoJudicial.client_id == client_id)
-        # novos filtros vindos de Processo
+
+        # filtros vindos de campos do Processo (via join acima)
         if case_type_id:
             query = query.filter(Processo.case_type_id == case_type_id)
         if phase_id:
@@ -63,8 +64,10 @@ class PrazoService:
             query = query.filter(Processo.practice_area_id == practice_area_id)
         if court_id:
             query = query.filter(Processo.court_id == court_id)
+
+        # — CORREÇÃO: filtrar pelo status do PRAZO, não do processo
         if status:
-            query = query.filter(Processo.status == status)
+            query = query.filter(PrazoJudicial.status == status)
 
         return query.order_by(PrazoJudicial.date).all()
 

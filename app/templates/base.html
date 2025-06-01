@@ -35,12 +35,14 @@
 
   <body class="{% block body_class %}{% endblock %}">
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light sticky-top shadow-sm">
       <div class="container-fluid">
         <a href="{{ url_for('index.index') }}" class="navbar-brand d-flex align-items-center">
           <img src="{{ url_for('static', filename='icons/logo_pag.png') }}"
                alt="Logo"
-               style="width: 100px; height: 100px; object-fit: cover">
+               class="rounded-circle me-2"
+               style="width: 48px; height: 48px; object-fit: cover;">
+          <span class="fs-5">AdGest</span>
         </a>
         <button class="navbar-toggler" type="button"
                 data-bs-toggle="collapse" data-bs-target="#navbarNav"
@@ -50,21 +52,24 @@
         </button>
   
         <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav ms-auto">
+          <ul class="navbar-nav ms-auto align-items-center">
             <!-- Notificações -->
             <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" id="navbarNotifications"
+              <a class="nav-link position-relative dropdown-toggle" href="#" id="navbarNotifications"
                  role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="fa-solid fa-bell"></i>
+                <i class="fa-solid fa-bell fa-lg"></i>
                 {% if unread_count > 0 %}
-                  <span class="badge bg-danger">{{ unread_count }}</span>
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {{ unread_count }}
+                    <span class="visually-hidden">notificações não lidas</span>
+                  </span>
                 {% endif %}
               </a>
-              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarNotifications">
+              <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="navbarNotifications">
                 {% if notifications %}
                   {% for notif in notifications %}
-                    <li class="notification-item dropdown-item d-flex justify-content-between align-items-start">
-                      <div>
+                    <li class="d-flex justify-content-between align-items-start px-2 py-1">
+                      <div class="me-2">
                         {{ notif.message }}
                         <br>
                         <small class="text-muted">
@@ -75,13 +80,15 @@
                             onsubmit="return markAsRead(
                               event,
                               '{{ url_for('notifications.mark_read', notif_id=notif.id) }}'
-                            )"
-                            class="ms-2">
-                        <button class="btn btn-sm btn-outline-secondary" type="submit">
+                            )">
+                        <button class="btn btn-sm btn-outline-light" type="submit">
                           Marcar como Lida
                         </button>
                       </form>
                     </li>
+                    {% if not loop.last %}
+                      <li><hr class="dropdown-divider"></li>
+                    {% endif %}
                   {% endfor %}
                 {% else %}
                   <li><span class="dropdown-item">Nenhuma notificação</span></li>
@@ -113,8 +120,8 @@
                   <a class="nav-link p-0" href="{{ url_for('auth.profile') }}">
                     <img src="{{ current_user.profile_image }}"
                          alt="Avatar"
-                         class="rounded-circle"
-                         style="width:40px; height:40px; object-fit:cover;">
+                         class="rounded-circle border border-light"
+                         style="width:32px; height:32px; object-fit:cover;">
                   </a>
                 </li>
               {% endif %}
@@ -128,22 +135,26 @@
 
     <!-- Flash messages -->
     <div class="container mt-3">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                  {{ message }}
+                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+              {% endfor %}
+            {% endif %}
+          {% endwith %}
+        </div>
+      </div>
     </div>
 
     <!-- Conteúdo principal -->
-    <div class="container">
+    <main class="container py-4">
       {% block content %}{% endblock %}
-    </div>
+    </main>
 
     <!-- 1) jQuery (precisa vir antes do Select2) -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
@@ -166,40 +177,46 @@
       const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
 
       function markAsRead(event, url) {
-      event.preventDefault();
-      fetch(url, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-CSRFToken': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      })
-      .then(resp => {
-        if (resp.status === 204) {
-          // 1) Remove o item da lista
-          const item = event.target.closest('.notification-item');
-          if (item) item.remove();
-
-          // 2) Atualiza o badge de notificações na Navbar
-          const badge = document.querySelector('#navbarNotifications .badge');
-          if (badge) {
-            let count = parseInt(badge.textContent, 10) - 1;
-            if (count > 0) {
-              badge.textContent = count;
-            } else {
-              badge.remove();  // esconde o badge se for zero
-            }
+        event.preventDefault();
+        fetch(url, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
           }
-          return;
-        }
-        return resp.json().then(j => { throw new Error(j.error || resp.status) });
-      })
-      .catch(err => alert('Erro: ' + err.message));
-    }
+        })
+        .then(resp => {
+          if (resp.status === 204) {
+            // 1) Remove o item da lista
+            const item = event.target.closest('.notification-item');
+            if (item) item.remove();
 
+            // 2) Atualiza o badge de notificações na Navbar
+            const badge = document.querySelector('#navbarNotifications .badge');
+            if (badge) {
+              let count = parseInt(badge.textContent, 10) - 1;
+              if (count > 0) {
+                badge.textContent = count;
+              } else {
+                badge.remove();  // esconde o badge se for zero
+              }
+            }
+            return;
+          }
+          return resp.json().then(j => { throw new Error(j.error || resp.status) });
+        })
+        .catch(err => alert('Erro: ' + err.message));
+      }
     </script>
 
     {% include 'dashboard/sortable_script.html' %}
+
+    <!-- Rodapé -->
+    <footer class="bg-light text-center py-3 mt-4 shadow-sm">
+      <div class="container">
+        <small class="text-muted">© 2025 AdGest. Todos os direitos reservados.</small>
+      </div>
+    </footer>
   </body>
 </html>

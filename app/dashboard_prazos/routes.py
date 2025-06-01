@@ -24,7 +24,7 @@ def manage():
     csrf_form      = DummyForm()
 
     # qual aba estamos: 'prazos' ou 'processos'
-    mode = request.args.get('mode', 'prazos')
+    mode = request.args.get('mode', 'processos')
 
     # filtros comuns
     client_id   = request.args.get('client_id',   type=int)

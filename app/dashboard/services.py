@@ -6,8 +6,6 @@ from typing import Dict, Any, List
 from app.assuntos.services import AssuntoService
 from app.prazos.services import PrazoService
 from app.tarefas.services import TarefaService
-# se usares notificações:
-# from app.notifications.services import NotificationService
 
 def fetch_dashboard_data(user) -> Dict[str, Any]:
     """
@@ -47,7 +45,6 @@ def fetch_dashboard_data(user) -> Dict[str, Any]:
         for a in assuntos
     }
 
-    # ← Aqui é fundamental devolver o dict
     return {
         'assuntos':      assuntos,
         'prazos':        prazos,
@@ -62,47 +59,61 @@ def get_overview_data(user) -> Dict[str, Any]:
     """
     Agrega tudo para o dashboard ‘overview’:
       - hoje & amanhã
-      - listas de tarefas (overdue, today, tomorrow)
-      - listas de prazos (today, tomorrow)
+      - listas de tarefas (overdue, today, tomorrow, day_after_tomorrow)
+      - listas de prazos (overdue, today, tomorrow, day_after_tomorrow)
       - contagens para KPI cards
+      - rótulos de dia (day_labels) para mostrar “Domingo 01/06/2025” etc.
     """
     base = fetch_dashboard_data(user)
 
     hoje   = date.today()
     amanha = hoje + timedelta(days=1)
+    dois_dias = hoje + timedelta(days=2)
 
-    # achata todas as tarefas numa lista
+    # ——— LISTA “ALL TASKS” ———
     all_tasks: List = TarefaService.list_for_user(user)
 
-    # filtra por datas/status
-    tasks_overdue   = [
-    t for t in all_tasks
-    if t.due_date
-       and t.due_date.date() < hoje
-       and t.status == 'open'
-    ]
-    tasks_today     = [
+    # ——— FILTROS DE TAREFAS ———
+    tasks_overdue = [
         t for t in all_tasks
         if t.due_date
-        and t.due_date.date() == hoje
-        and t.status == 'open'
+           and t.due_date.date() < hoje
+           and t.status == 'open'
     ]
-    tasks_tomorrow  = [
+    tasks_today = [
         t for t in all_tasks
         if t.due_date
-        and t.due_date.date() == amanha
-        and t.status == 'open'
+           and t.due_date.date() == hoje
+           and t.status == 'open'
     ]
-    # só prazos “open”
+    tasks_tomorrow = [
+        t for t in all_tasks
+        if t.due_date
+           and t.due_date.date() == amanha
+           and t.status == 'open'
+    ]
+    tasks_day_after_tomorrow = [
+        t for t in all_tasks
+        if t.due_date
+           and t.due_date.date() == dois_dias
+           and t.status == 'open'
+    ]
+
+    # ——— FILTROS DE PRAZOS ———
     open_deadlines = [p for p in base['prazos'] if getattr(p, 'status', 'open') == 'open']
     deadlines_overdue  = [p for p in open_deadlines if p.date < hoje]
     deadlines_today    = [p for p in open_deadlines if p.date == hoje]
     deadlines_tomorrow = [p for p in open_deadlines if p.date == amanha]
+    deadlines_day_after_tomorrow = [  # <- este filtro garante “Depois de Amanhã”
+        p for p in open_deadlines
+        if p.date == dois_dias
+    ]
 
-    # KPI counts
+    # ——— KPI COUNTS ———
     counts = {
         'tasks_overdue':      len(tasks_overdue),
         'tasks_today':        len(tasks_today),
+        # não há card no topo para “tasks_day_after_tomorrow”
         'deadlines_today':    len(deadlines_today),
         'deadlines_overdue':  len(deadlines_overdue),
         'deadlines_tomorrow': len(deadlines_tomorrow),
@@ -110,26 +121,53 @@ def get_overview_data(user) -> Dict[str, Any]:
         # 'notifications':      NotificationService.count_unread(user.id),
     }
 
+    # ——— DAY LABELS (ex.: “Domingo 01/06/2025”, “Segunda-Feira 02/06/2025”, “Terça-Feira 03/06/2025”) ———
+    primeiro_do_mes = hoje.replace(day=1)
+    map_semana = {
+        0: "Segunda-Feira",
+        1: "Terça-Feira",
+        2: "Quarta-Feira",
+        3: "Quinta-Feira",
+        4: "Sexta-Feira",
+        5: "Sábado",
+        6: "Domingo",
+    }
+    day_labels: List[Dict[str, str]] = []
+    for i in range(3):
+        d = primeiro_do_mes + timedelta(days=i)
+        nome_semana_pt = map_semana[d.weekday()]
+        day_labels.append({
+            'weekday': nome_semana_pt,
+            'date':    d.strftime('%d/%m/%Y')
+        })
+
+    # ——— MONTAÇÃO DO DICIONÁRIO FINAL ———
     return {
         # datas de referência
         'hoje':    hoje,
         'amanha':  amanha,
 
-        # listas de objetos
-        'tasks_overdue':      tasks_overdue,
-        'tasks_today':        tasks_today,
-        'tasks_tomorrow':     tasks_tomorrow,
+        # listas de objetos (tarefas)
+        'tasks_overdue':             tasks_overdue,
+        'tasks_today':               tasks_today,
+        'tasks_tomorrow':            tasks_tomorrow,
+        'tasks_day_after_tomorrow':  tasks_day_after_tomorrow,
 
-        'deadlines_overdue':  (deadlines_overdue),
-        'deadlines_today':    deadlines_today,
-        'deadlines_tomorrow': deadlines_tomorrow,
+        # listas de objetos (prazos)
+        'deadlines_overdue':             deadlines_overdue,
+        'deadlines_today':               deadlines_today,
+        'deadlines_tomorrow':            deadlines_tomorrow,
+        'deadlines_day_after_tomorrow':  deadlines_day_after_tomorrow,
 
         # contagens para os KPI cards
         'counts': counts,
 
-        # dados adicionais para macros ou tabelas detalhadas
+        # dados extras para tabelas detalhadas ou macros
         'assuntos':      base['assuntos'],
         'task_hours':    base['task_hours'],
         'prazo_hours':   base['prazo_hours'],
         'assunto_hours': base['assunto_hours'],
+
+        # rótulos de dia para os “quadrados pretos”
+        'day_labels':                 day_labels,
     }

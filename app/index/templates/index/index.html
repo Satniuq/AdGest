@@ -1,5 +1,4 @@
 {# app/index/templates/index/index.html #}
-
 {% extends 'base.html' %}
 
 {% block extra_css %}
@@ -9,93 +8,94 @@
     href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.4/main.min.css"
     rel="stylesheet"
   />
+
+  <style>
+    /* ===================================================
+       1) Ajustes gerais para aumentar o espaçamento nos cards
+       =================================================== */
+    /* Damos um pouco de “respiração” entre os itens da lista */
+    .list-group-item {
+      margin-bottom: 0.5rem; 
+      padding: 0.75rem 1rem;
+    }
+
+    /* O h5 (“Tarefas” / “Prazos”) ganha margem inferior */
+    .col-lg-3 > h5 {
+      margin-bottom: 0.75rem;
+    }
+
+    /* ===================================================
+       2) Estilo para os “date-boxes” (datas com dia da semana)
+       =================================================== */
+    .date-box {
+      display: inline-block;
+      padding: 4px 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border-radius: 4px;
+      border: 1px solid;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      text-align: center;
+      min-width: 120px; /* Cabe “Quarta-Feira – 03/06/2025” */
+    }
+    .date-hoje {
+      background-color: #E8F4FD;
+      border-color:    #0D6EFD;
+      color:           #0D6EFD;
+    }
+    .date-amanha {
+      background-color: #FFF8E1;
+      border-color:    #FFC107;
+      color:           #FFC107;
+    }
+    .date-depois {
+      background-color: #F5F5F5;
+      border-color:    #6C757D;
+      color:           #6C757D;
+    }
+    li.cabecalho-secao {
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    /* ===================================================
+       3) Ajustes para o calendário
+       =================================================== */
+    /* Faz o container do FullCalendar ocupar altura mínima mais generosa */
+    .calendar-container {
+      min-height: 600px;
+      /* Opcional: pode mudar para 650px ou 700px, dependendo de quanto quiser “esticá-lo” */
+    }
+
+    /* Remove margens laterais no container do calendário para que fique bem centralizado */
+    .col-lg-6 {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+  </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-
-  {# — HEADER DE CARDS — #}
-  <header class="mb-4">
-    <div class="d-flex justify-content-between align-items-start">
-      
-      {# Grupo Tarefas #}
-      <div>
-        <small class="text-secondary">Tarefas</small>
-        <div class="d-flex flex-nowrap align-items-stretch" style="gap: 1rem; margin-top: 0.25rem;">
-          <div class="card border-danger text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-exclamation-circle fa-2x text-danger mb-2"></i>
-              <h3>{{ counts.tasks_overdue }}</h3>
-              <p class="mb-0">Atrasadas</p>
-            </div>
-          </div>
-          <div class="card border-info text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-calendar-day fa-2x text-info mb-2"></i>
-              <h3>{{ counts.tasks_today }}</h3>
-              <p class="mb-0">Hoje</p>
-            </div>
-          </div>
-          <div class="card border-warning text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-calendar-alt fa-2x text-warning mb-2"></i>
-              <h3>{{ counts.tasks_tomorrow }}</h3>
-              <p class="mb-0">Amanhã</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {# Divider vertical #}
-      <div class="vr mx-4"></div>
-
-      {# Grupo Prazos #}
-      <div>
-        <small class="text-secondary">Prazos</small>
-        <div class="d-flex flex-nowrap align-items-stretch" style="gap: 1rem; margin-top: 0.25rem;">
-          <div class="card border-danger text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-clock fa-2x text-danger mb-2"></i>
-              <h3>{{ counts.deadlines_overdue }}</h3>
-              <p class="mb-0">Atrasados</p>
-            </div>
-          </div>
-          <div class="card border-info text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-calendar-check fa-2x text-info mb-2"></i>
-              <h3>{{ counts.deadlines_today }}</h3>
-              <p class="mb-0">Hoje</p>
-            </div>
-          </div>
-          <div class="card border-warning text-center" style="min-width:10rem">
-            <div class="card-body">
-              <i class="fas fa-hourglass-half fa-2x text-warning mb-2"></i>
-              <h3>{{ counts.deadlines_tomorrow }}</h3>
-              <p class="mb-0">Amanhã</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </header>
-
-  {# — CALENDÁRIO — #}
   <div class="row">
-    <!-- Tarefas à esquerda -->
+
+    {# === 1) COLUNA “Tarefas” (col-lg-3) === #}
     <div class="col-lg-3 mb-4">
       <h5>Tarefas</h5>
       <ul class="list-group">
+
+        {# --- Seção “Atrasadas” --- #}
         <li class="list-group-item bg-light"><strong>Atrasadas</strong></li>
         {% if tasks_overdue %}
           {% for t in tasks_overdue %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ t.assunto.title }} – {{ t.title }}
-                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ t.due_date.date().strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-danger ms-2">Atrasada</span>
-                {# Botão Histórico #}
-                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
+                <a href="{{ url_for('tarefas.history', id=t.id) }}"
                    class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
                   <i class="fas fa-eye"></i>
                 </a>
@@ -106,66 +106,123 @@
           <li class="list-group-item text-muted">Nenhuma tarefa atrasada.</li>
         {% endif %}
 
-        <li class="list-group-item bg-light"><strong>Hoje</strong></li>
+        {# --- Seção “Hoje” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Hoje</strong>
+            <span class="date-box date-hoje">
+              {{ weekday_today }} – {{ date_today }}
+            </span>
+          </div>
+        </li>
         {% if tasks_today %}
           {% for t in tasks_today %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ t.assunto.title }} – {{ t.title }}
-                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ t.due_date.date().strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-info ms-2">Hoje</span>
-                {# Botão Histórico #}
-                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
-                   class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
-                  <i class="fas fa-eye"></i>
-                </a>
               </div>
+              <a href="{{ url_for('tarefas.history', id=t.id) }}"
+                 class="btn btn-sm btn-outline-info" title="Ver histórico">
+                <i class="fas fa-eye"></i>
+              </a>
             </li>
           {% endfor %}
         {% else %}
           <li class="list-group-item text-muted">Nenhuma tarefa para hoje.</li>
         {% endif %}
 
-        <li class="list-group-item bg-light"><strong>Amanhã</strong></li>
+        {# --- Seção “Amanhã” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Amanhã</strong>
+            <span class="date-box date-amanha">
+              {{ weekday_tomorrow }} – {{ date_tomorrow }}
+            </span>
+          </div>
+        </li>
         {% if tasks_tomorrow %}
           {% for t in tasks_tomorrow %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ t.assunto.title }} – {{ t.title }}
-                <small class="text-muted">({{ t.due_date.date().strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ t.due_date.date().strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-warning text-dark ms-2">Amanhã</span>
-                {# Botão Histórico #}
-                <a href="{{ url_for('tarefas.history', id=t.id) }}" 
-                   class="btn btn-sm btn-outline-info ms-2" title="Ver histórico">
-                  <i class="fas fa-eye"></i>
-                </a>
               </div>
+              <a href="{{ url_for('tarefas.history', id=t.id) }}"
+                 class="btn btn-sm btn-outline-info" title="Ver histórico">
+                <i class="fas fa-eye"></i>
+              </a>
             </li>
           {% endfor %}
         {% else %}
           <li class="list-group-item text-muted">Nenhuma tarefa para amanhã.</li>
         {% endif %}
+
+        {# --- Seção “Depois de Amanhã” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Depois de Amanhã</strong>
+            <span class="date-box date-depois">
+              {{ weekday_day_after }} – {{ date_day_after }}
+            </span>
+          </div>
+        </li>
+        {% if tasks_day_after_tomorrow %}
+          {% for t in tasks_day_after_tomorrow %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ t.assunto.title }} – {{ t.title }}
+                <small class="text-muted">
+                  ({{ t.due_date.date().strftime('%d/%m/%Y') }})
+                </small>
+                <span class="badge bg-secondary ms-2">Depois de Amanhã</span>
+              </div>
+              <a href="{{ url_for('tarefas.history', id=t.id) }}"
+                 class="btn btn-sm btn-outline-info" title="Ver histórico">
+                <i class="fas fa-eye"></i>
+              </a>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhuma tarefa para depois de amanhã.</li>
+        {% endif %}
+
       </ul>
     </div>
+    {# === Fim da COLUNA “Tarefas” === #}
 
-    <!-- Calendário no centro -->
+
+    {# === 2) COLUNA “Calendário” (col-lg-6) === #}
     <div class="col-lg-6 mb-4">
-      {% include 'index/_calendar.html' %}
+      <div class="calendar-container">
+        {% include 'index/_calendar.html' %}
+      </div>
     </div>
+    {# === Fim da COLUNA “Calendário” === #}
 
-    <!-- Prazos à direita -->
+
+    {# === 3) COLUNA “Prazos” (col-lg-3) === #}
     <div class="col-lg-3 mb-4">
       <h5>Prazos</h5>
       <ul class="list-group">
+
+        {# --- Seção “Atrasados” --- #}
         <li class="list-group-item bg-light"><strong>Atrasados</strong></li>
         {% if deadlines_overdue %}
           {% for p in deadlines_overdue %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
-                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ p.date.strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-danger ms-2">Atrasado</span>
-                {# Botão Detalhes #}
                 <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
                    class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
                   <i class="fas fa-eye"></i>
@@ -177,15 +234,24 @@
           <li class="list-group-item text-muted">Nenhum prazo atrasado.</li>
         {% endif %}
 
-        <li class="list-group-item bg-light"><strong>Hoje</strong></li>
+        {# --- Seção “Hoje” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Hoje</strong>
+            <span class="date-box date-hoje">
+              {{ weekday_today }} – {{ date_today }}
+            </span>
+          </div>
+        </li>
         {% if deadlines_today %}
           {% for p in deadlines_today %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
-                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ p.date.strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-info ms-2">Hoje</span>
-                {# Botão Detalhes #}
                 <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
                    class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
                   <i class="fas fa-eye"></i>
@@ -197,15 +263,24 @@
           <li class="list-group-item text-muted">Nenhum prazo para hoje.</li>
         {% endif %}
 
-        <li class="list-group-item bg-light"><strong>Amanhã</strong></li>
+        {# --- Seção “Amanhã” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Amanhã</strong>
+            <span class="date-box date-amanha">
+              {{ weekday_tomorrow }} – {{ date_tomorrow }}
+            </span>
+          </div>
+        </li>
         {% if deadlines_tomorrow %}
           {% for p in deadlines_tomorrow %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
               <div>
                 {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
-                <small class="text-muted">({{ p.date.strftime('%d/%m/%Y') }})</small>
+                <small class="text-muted">
+                  ({{ p.date.strftime('%d/%m/%Y') }})
+                </small>
                 <span class="badge bg-warning text-dark ms-2">Amanhã</span>
-                {# Botão Detalhes #}
                 <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
                    class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
                   <i class="fas fa-eye"></i>
@@ -216,9 +291,42 @@
         {% else %}
           <li class="list-group-item text-muted">Nenhum prazo para amanhã.</li>
         {% endif %}
+
+        {# --- Seção “Depois de Amanhã” com dia da semana + data --- #}
+        <li class="list-group-item bg-light cabecalho-secao">
+          <div class="d-flex justify-content-between align-items-center">
+            <strong>Depois de Amanhã</strong>
+            <span class="date-box date-depois">
+              {{ weekday_day_after }} – {{ date_day_after }}
+            </span>
+          </div>
+        </li>
+        {% if deadlines_day_after_tomorrow %}
+          {% for p in deadlines_day_after_tomorrow %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                {{ p.processo.external_id or p.processo.id }} – {{ p.description }}
+                <small class="text-muted">
+                  ({{ p.date.strftime('%d/%m/%Y') }})
+                </small>
+                <span class="badge bg-secondary ms-2">Depois de Amanhã</span>
+                <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                   class="btn btn-sm btn-outline-info ms-2" title="Ver detalhes">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </li>
+          {% endfor %}
+        {% else %}
+          <li class="list-group-item text-muted">Nenhum prazo para depois de amanhã.</li>
+        {% endif %}
+
       </ul>
     </div>
+    {# === Fim da COLUNA “Prazos” === #}
+
   </div>
+  {# — Fim da row principal — #}
 </div>
 {% endblock %}
 

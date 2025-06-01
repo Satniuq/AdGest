@@ -1,11 +1,13 @@
 {% extends 'base.html' %}
 
-{# —— Define o título da página dinamicamente —— #}
+{# — Se não vier mode, faz o padrão ser 'processos' — #}
+{% set mode = mode or 'processos' %}
+
 {% block title %}
-  {% if mode=='prazos' %}
-    Gestão de Prazos
-  {% else %}
+  {% if mode == 'processos' %}
     Gestão de Processos
+  {% else %}
+    Gestão de Prazos
   {% endif %}
 {% endblock %}
 
@@ -13,32 +15,18 @@
 <div class="container-fluid py-4">
   <!-- cabeçalho flex: título à esquerda, abas à direita -->
   <div class="d-flex justify-content-between align-items-center mb-4">
-    {# —— H1 dinâmico —— #}
+    <!-- H1 dinâmico -->
     <h1 class="mb-0">
-      {% if mode=='prazos' %}
-        Gestão de Prazos
-      {% else %}
+      {% if mode == 'processos' %}
         Gestão de Processos
+      {% else %}
+        Gestão de Prazos
       {% endif %}
     </h1>
 
     <ul class="nav nav-tabs mb-0">
       <li class="nav-item">
-        <a class="nav-link {% if mode=='prazos' %}active{% endif %}"
-           href="{{ url_for('dashboard_prazos.manage',
-                            mode='prazos',
-                            client_id=client_id,
-                            type_id=type_id,
-                            case_type_id=case_type_id,
-                            phase_id=phase_id,
-                            status=status,
-                            external_id=external_id,
-                            sort=sort) }}">
-          Prazos
-        </a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link {% if mode=='processos' %}active{% endif %}"
+        <a class="nav-link {% if mode == 'processos' %}active{% endif %}"
            href="{{ url_for('dashboard_prazos.manage',
                             mode='processos',
                             client_id=client_id,
@@ -51,30 +39,43 @@
           Processos
         </a>
       </li>
+      <li class="nav-item">
+        <a class="nav-link {% if mode == 'prazos' %}active{% endif %}"
+           href="{{ url_for('dashboard_prazos.manage',
+                            mode='prazos',
+                            client_id=client_id,
+                            type_id=type_id,
+                            case_type_id=case_type_id,
+                            phase_id=phase_id,
+                            status=status,
+                            external_id=external_id,
+                            sort=sort) }}">
+          Prazos
+        </a>
+      </li>
     </ul>
   </div>
 
-  {# -- Formulário de filtros (compacto em altura) -- #}
+  <!-- Formulário de filtros -->
   <form method="get"
         action="{{ url_for('dashboard_prazos.manage') }}"
         class="card mb-4 p-2">
     <input type="hidden" name="mode" value="{{ mode }}">
     <div class="row g-1 align-items-end">
-
-      {# -- Cliente -- #}
+      <!-- Cliente -->
       <div class="col-md-3">
         <label class="form-label small">Cliente</label>
         <select name="client_id" class="form-select form-select-sm">
           <option value="">Todos</option>
           {% for c in clients %}
-            <option value="{{ c.id }}" {% if c.id==client_id %}selected{% endif %}>
+            <option value="{{ c.id }}" {% if c.id == client_id %}selected{% endif %}>
               {{ c.name }}
             </option>
           {% endfor %}
         </select>
       </div>
 
-      {# -- Número do Processo -- #}
+      <!-- Número do Processo -->
       <div class="col-md-3">
         <label class="form-label small">Número do Processo</label>
         <input type="text"
@@ -84,99 +85,113 @@
                placeholder="Ex: P-2025-0001">
       </div>
 
-      {% if mode=='prazos' %}
-        {# Linha única para filtros de prazos #}
-        <div class="col-md-3">
+      {% if mode == 'prazos' %}
+        <!-- Linha única para filtros de prazos -->
+        <div class="col-md-2">
           <label class="form-label small">Tipo de Prazo</label>
           <select name="type_id" class="form-select form-select-sm">
             <option value="">Todos</option>
             {% for t in types %}
-              <option value="{{ t.id }}" {% if t.id==type_id %}selected{% endif %}>
+              <option value="{{ t.id }}" {% if t.id == type_id %}selected{% endif %}>
                 {{ t.name }}
               </option>
             {% endfor %}
           </select>
         </div>
+
+        <div class="col-md-2">
+          <label class="form-label small">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="open"   {% if status == 'open'   %}selected{% endif %}>Aberto</option>
+            <option value="closed" {% if status == 'closed' %}selected{% endif %}>Fechado</option>
+          </select>
+        </div>
+
         <div class="col-md-2">
           <label class="form-label small">Ordenação</label>
           <select name="sort" class="form-select form-select-sm">
-            <option value="nearest"  {% if sort=='nearest'  %}selected{% endif %}>Prazos Mais Próximos</option>
-            <option value="farthest" {% if sort=='farthest' %}selected{% endif %}>Prazos Mais Distantes</option>
+            <option value="nearest"  {% if sort == 'nearest'  %}selected{% endif %}>Prazos Mais Próximos</option>
+            <option value="farthest" {% if sort == 'farthest' %}selected{% endif %}>Prazos Mais Distantes</option>
           </select>
         </div>
+
         <div class="col-auto">
           <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
         </div>
 
-        {# preserva filtros de processos escondidos #}
-        <input type="hidden" name="case_type_id"     value="{{ case_type_id }}">
-        <input type="hidden" name="phase_id"          value="{{ phase_id }}">
-        <input type="hidden" name="status"            value="{{ status }}">
-
+        <!-- preserva filtros de processos escondidos -->
+        <input type="hidden" name="case_type_id"      value="{{ case_type_id }}">
+        <input type="hidden" name="phase_id"           value="{{ phase_id }}">
+        <input type="hidden" name="practice_area_id"   value="{{ practice_area_id }}">
+        <input type="hidden" name="court_id"           value="{{ court_id }}">
       {% else %}
-        {# Dois blocos/linhas para filtros de processos #}
+        <!-- Dois blocos/linhas para filtros de processos -->
         <div class="col-md-2">
           <label class="form-label small">Tipo de Caso</label>
           <select name="case_type_id" class="form-select form-select-sm">
             <option value="">Todos</option>
             {% for ct in case_types %}
-              <option value="{{ ct.id }}" {% if ct.id==case_type_id %}selected{% endif %}>
+              <option value="{{ ct.id }}" {% if ct.id == case_type_id %}selected{% endif %}>
                 {{ ct.name }}
               </option>
             {% endfor %}
           </select>
         </div>
+
         <div class="col-md-2">
           <label class="form-label small">Fase</label>
           <select name="phase_id" class="form-select form-select-sm">
             <option value="">Todas</option>
             {% for ph in phases %}
-              <option value="{{ ph.id }}" {% if ph.id==phase_id %}selected{% endif %}>
+              <option value="{{ ph.id }}" {% if ph.id == phase_id %}selected{% endif %}>
                 {{ ph.name }}
               </option>
             {% endfor %}
           </select>
         </div>
+
         <div class="col-md-2">
           <label class="form-label small">Status</label>
           <select name="status" class="form-select form-select-sm">
             <option value="">Todos</option>
-            <option value="open"      {% if status=='open'      %}selected{% endif %}>Aberto</option>
-            <option value="closed"    {% if status=='closed'    %}selected{% endif %}>Fechado</option>
-            <option value="suspended" {% if status=='suspended' %}selected{% endif %}>Suspenso</option>
+            <option value="open"      {% if status == 'open'      %}selected{% endif %}>Aberto</option>
+            <option value="closed"    {% if status == 'closed'    %}selected{% endif %}>Fechado</option>
+            <option value="suspended" {% if status == 'suspended' %}selected{% endif %}>Suspenso</option>
           </select>
         </div>
 
         <div class="col-md-2">
           <label class="form-label small">Ordenação</label>
           <select name="sort" class="form-select form-select-sm">
-            <option value="desc" {% if sort=='desc' %}selected{% endif %}>Mais Recentes</option>
-            <option value="asc"  {% if sort=='asc'  %}selected{% endif %}>Mais Antigos</option>
+            <option value="desc" {% if sort == 'desc' %}selected{% endif %}>Mais Recentes</option>
+            <option value="asc"  {% if sort == 'asc'  %}selected{% endif %}>Mais Antigos</option>
           </select>
         </div>
+
         <div class="col-auto">
           <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
         </div>
 
-        {# preserva filtro de prazos escondido #}
+        <!-- preserva filtro de prazos escondido -->
         <input type="hidden" name="type_id" value="{{ type_id }}">
       {% endif %}
     </div>
-  </form>
+  </form>  {# <<< Fecha o form de filtros aqui #}
 
-  {# -- Resultado via partials -- #}
+  <!-- Resultado via partials (invertidos) -->
   <div class="card">
     <div class="card-body p-0">
-      {% if mode=='prazos' %}
-        {% include '_prazos_list.html' %}
-      {% else %}
+      {% if mode == 'processos' %}
         {% include '_processos_list.html' %}
+      {% else %}
+        {% include '_prazos_list.html' %}
       {% endif %}
     </div>
   </div>
-</div>
+</div>  {# fecha container-fluid #}
 
-{# -- AJAX para fases dinâmicas -- #}
+<!-- AJAX para fases dinâmicas -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const caseTypeSel = document.querySelector('select[name="case_type_id"]');
@@ -188,8 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!this.value) return;
 
     fetch(
-      "{{ url_for('dashboard_prazos.ajax_phases', case_type_id=0) }}"
-        .replace('/0', '/' + this.value)
+      "{{ url_for('dashboard_prazos.ajax_phases', case_type_id=0) }}".replace('/0', '/' + this.value)
     )
     .then(r => r.ok ? r.json() : Promise.reject(r.status))
     .then(data => {
