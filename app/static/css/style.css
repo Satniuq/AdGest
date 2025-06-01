@@ -368,3 +368,115 @@ li.cabecalho-secao {
   padding-top: 6px;
   padding-bottom: 6px;
 }
+
+/* ============================
+   Ajustes de responsividade
+   ============================ */
+
+/* (1) Mobile / XS e SM: até 575.98px */
+@media (max-width: 575.98px) {
+  /* Containers e rows mais apertados */
+  .container,
+  .container-fluid {
+    margin-top: 10px !important;
+  }
+  .row {
+    margin-top: 10px !important;
+  }
+
+  /* Colunas col-md-* empilham e têm padding menor */
+  .col-md-3,
+  .col-md-9 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+  }
+
+  /* Tabelas: ocultar colunas menos críticas (ex.: 4ª coluna) */
+  .table thead th:nth-child(4),
+  .table tbody td:nth-child(4) {
+    display: none !important;
+  }
+
+  /* Botões full-width em mobile */
+  .btn-primary {
+    display: block;
+    width: 100% !important;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Texto mais escuro para melhor contraste */
+  :root {
+    --text-default: #555555;
+  }
+
+  /* Fonte reduzida em geral */
+  body {
+    font-size: 0.9rem;
+  }
+  h1, h2, h3 {
+    font-size: 1.2rem;
+  }
+  h4, h5, h6 {
+    font-size: 1rem;
+  }
+
+  /* Navbar: badges e ícones menores */
+  .navbar .fa-lg {
+    font-size: 1rem;
+  }
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.2em 0.3em;
+  }
+
+  /* Ajustes no login: empilha sem precisar de hover */
+  .login-container {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  .left-panel,
+  .right-panel {
+    flex: 0 0 auto;
+    width: 100%;
+    transition: none;
+  }
+  .left-panel {
+    order: 2;
+  }
+  .right-panel {
+    order: 1;
+  }
+}
+
+/* (2) Tablet / MD: 768px até 991.98px */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .container,
+  .container-fluid {
+    margin-top: 15px !important;
+  }
+  .row {
+    margin-top: 15px !important;
+  }
+  .col-md-3,
+  .col-md-9 {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  /* Botão principal ocupa parcialmente (não full-width) */
+  .btn-primary {
+    width: auto !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+/* (3) Ajustes gerais que valem para todos */
+@media (max-width: 991.98px) {
+  /* Se precisar, diminua o bg-light para que ele não cubra tabelas colapsadas */
+  .bg-light {
+    background-color: #e8e8e8 !important;
+  }
+}
+
