@@ -30,17 +30,24 @@ def edit_profile():
     form = EditProfileForm(obj=current_user)
 
     if form.validate_on_submit():
+        # 1) Verifica se o usuário informou a senha atual antes de continuar
+        if form.current_password.data:
+            if not check_password_hash(current_user.password, form.current_password.data):
+                flash('Senha atual incorreta.', 'danger')
+                return redirect(url_for('auth.edit_profile'))
+        else:
+            flash('Você deve informar sua senha atual para atualizar os dados.', 'warning')
+            return redirect(url_for('auth.edit_profile'))
+
+        # 2) Atualiza nickname e email
         current_user.nickname = form.nickname.data
         current_user.email = form.email.data
 
+        # 3) Se veio imagem nova, faz upload para o GCS
         if form.profile_image.data:
             file_data = form.profile_image.data
-            current_app.logger.info(f"Tipo de form.profile_image.data: {type(file_data)}")
-            current_app.logger.info(f"Arquivo recebido: {repr(file_data)}")
-
             if hasattr(file_data, 'filename') and file_data.filename:
                 filename = secure_filename(file_data.filename)
-                current_app.logger.info(f"Fazendo upload da imagem '{filename}' para o GCS")
                 try:
                     public_url = upload_to_gcs(
                         file_obj=file_data,
@@ -52,19 +59,24 @@ def edit_profile():
                     current_app.logger.error(f"Erro ao fazer upload para o GCS: {e}")
                     flash("Erro ao fazer upload da imagem. Tente novamente.", "danger")
                     return redirect(url_for("auth.edit_profile"))
-            else:
-                current_app.logger.info("Nenhum arquivo selecionado ou o valor não é um objeto FileStorage.")
-        else:
-            current_app.logger.info("Campo profile_image está vazio.")
 
+        # 4) Se o usuário informou nova senha, atualiza o hash
+        if form.new_password.data:
+            hashed_pw = generate_password_hash(form.new_password.data)
+            current_user.password = hashed_pw
+
+        # 5) Commit das alterações (nickname, email, imagem e senha, se houver)
         try:
             db.session.commit()
             flash('Perfil atualizado com sucesso!', 'success')
         except Exception as e:
             db.session.rollback()
-            flash('Erro ao atualizar o perfil. Tente novamente.', 'danger')
             current_app.logger.error(f"Erro ao atualizar perfil: {e}")
-
+            # Verifica se é violação de unicidade de email
+            if 'uq_users_email' in str(e):
+                flash('Este e-mail já está em uso por outro usuário.', 'danger')
+            else:
+                flash('Erro ao atualizar o perfil. Tente novamente.', 'danger')
         return redirect(url_for('auth.profile'))
 
     return render_template('auth/edit_profile.html', form=form)

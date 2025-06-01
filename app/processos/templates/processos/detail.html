@@ -91,7 +91,7 @@
       </div>
 
       <h5 class="mb-3">Prazos Associados</h5>
-      
+
       {# Abas Pendentes / Concluídos #}
       <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item">
@@ -107,107 +107,128 @@
       </ul>
 
       <div class="tab-content mb-4">
-        {% for status_tab, pane_id in [('open','pendentes'),('closed','concluidos')] %}
-        <div class="tab-pane fade {% if status_tab=='open' %}show active{% endif %}"
-             id="tab-{{ pane_id }}" role="tabpanel">
-          <div class="table-responsive">
-            <table class="table table-sm align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Tipo</th>
-                  <th>Descrição</th>
-                  <th>Data</th>
-                  <th class="text-center">Horas</th>
-                  <th class="text-center">Faturado</th>
-                  <th class="text-center">Pendente</th>
-                  <th class="text-end">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% set found = false %}
-                {% for p in prazos %}
-                  {% if p.status == status_tab %}
-                    {% set found = true %}
-                    {% set billed = p.billing_items.all()|map(attribute='hours')|sum %}
-                    {% set spent  = p.hours_spent or 0 %}
-                    {% set pend   = (spent - billed) if (spent - billed)>0 else 0 %}
-                    <tr>
-                      <td>{{ p.type.name }}</td>
-                      <td>{{ p.description }}</td>
-                      <td>{{ p.date.strftime('%d/%m/%Y') }}</td>
-                      <td class="text-center">{{ '%.1f'|format(spent) }}</td>
-                      <td class="text-center">{{ '%.1f'|format(billed) }}</td>
-                      <td class="text-center">{{ '%.1f'|format(pend) }}</td>
-                      <td class="text-end">
-                        {# Botão Ver #}
-                        <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
-                           class="btn btn-sm btn-outline-info me-1" title="Ver Prazo">
-                          <i class="fas fa-eye"></i>
-                        </a>
-                        {# Botão Editar #}
-                        <a href="{{ url_for('prazos.edit_prazo', prazo_id=p.id) }}"
-                           class="btn btn-sm btn-outline-primary me-1" title="Editar Prazo">
-                          <i class="fas fa-pen"></i>
-                        </a>
-                        {# Botão Excluir #}
-                        <form method="post"
-                              action="{{ url_for('prazos.delete_prazo', prazo_id=p.id) }}"
-                              class="d-inline"
-                              onsubmit="return confirm('Excluir este prazo?');">
-                          {{ add_hours_form.hidden_tag() }}
-                          <button type="submit"
-                                  class="btn btn-sm btn-outline-danger me-1"
-                                  title="Excluir Prazo">
-                            <i class="fas fa-trash"></i>
+        {% for status_tab, pane_id in [('open','pendentes'), ('closed','concluidos')] %}
+          <div class="tab-pane fade {% if status_tab=='open' %}show active{% endif %}"
+              id="tab-{{ pane_id }}" role="tabpanel">
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Tipo</th>
+                    <th>Descrição</th>
+                    <th>Data</th>
+                    <th class="text-center">Horas</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-end">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% set found = false %}
+                  {% for p in prazos %}
+                    {% if p.status == status_tab %}
+                      {% set found = true %}
+                      {% set spent = p.hours_spent or 0 %}
+                      <tr>
+                        <td>{{ p.type.name }}</td>
+                        <td>{{ p.description }}</td>
+                        <td>{{ p.date.strftime('%d/%m/%Y') }}</td>
+                        <td class="text-center">{{ '%.1f'|format(spent) }}</td>
+
+                        {# ========= coluna de Status ========= #}
+                        <td class="text-center">
+                          <form method="post"
+                                action="{{ url_for('prazos.toggle_prazo_status', prazo_id=p.id) }}"
+                                class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit"
+                                    class="btn btn-sm
+                                      {% if p.status=='open' %}btn-warning text-dark{% else %}btn-success{% endif %}"
+                                    title="Clique para alternar status">
+                              {{ p.status|capitalize }}
+                            </button>
+                          </form>
+                        </td>
+
+                        <td class="text-end">
+                          {# Botão Ver #}
+                          <a href="{{ url_for('prazos.detail_prazo', prazo_id=p.id) }}"
+                            class="btn btn-sm btn-outline-info me-1"
+                            title="Ver Prazo">
+                            <i class="fas fa-eye"></i>
+                          </a>
+                          {# Botão Editar #}
+                          <a href="{{ url_for('prazos.edit_prazo', prazo_id=p.id) }}"
+                            class="btn btn-sm btn-outline-primary me-1"
+                            title="Editar Prazo">
+                            <i class="fas fa-pen"></i>
+                          </a>
+                          {# Botão Excluir #}
+                          <form method="post"
+                                action="{{ url_for('prazos.delete_prazo', prazo_id=p.id) }}"
+                                class="d-inline"
+                                onsubmit="return confirm('Excluir este prazo?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit"
+                                    class="btn btn-sm btn-outline-danger me-1"
+                                    title="Excluir Prazo">
+                              <i class="fas fa-trash"></i>
+                            </button>
+                          </form>
+                          {# Botão Adicionar Horas #}
+                          <button class="btn btn-sm btn-outline-secondary"
+                                  data-bs-toggle="modal"
+                                  data-bs-target="#modalHoras{{ p.id }}"
+                                  title="Adicionar Horas">
+                            <i class="fas fa-clock"></i>
                           </button>
-                        </form>
-                        {# Botão Adicionar Horas #}
-                        <button class="btn btn-sm btn-outline-secondary"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalHoras{{ p.id }}"
-                                title="Adicionar Horas">
-                          <i class="fas fa-clock"></i>
-                        </button>
+                        </td>
+                      </tr>
+
+                      {# — Modal de Adicionar Horas para este prazo — #}
+                      <div class="modal fade" id="modalHoras{{ p.id }}" tabindex="-1"
+                          aria-labelledby="modalHorasLabel{{ p.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-sm">
+                          <form method="post"
+                                action="{{ url_for('processos.detail_process', processo_id=processo.id) }}">
+                            {{ add_hours_form.hidden_tag() }}
+                            <input type="hidden" name="prazo_id" value="{{ p.id }}">
+                            <div class="modal-content">
+                              <div class="modal-header">
+                                <h5 class="modal-title">
+                                  Adicionar Horas – Prazo #{{ p.id }}
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                              </div>
+                              <div class="modal-body">
+                                {{ add_hours_form.hours(
+                                    class_='form-control',
+                                    id='hours'~p.id) }}
+                              </div>
+                              <div class="modal-footer">
+                                {{ add_hours_form.submit(class_='btn btn-primary') }}
+                              </div>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+
+                    {% endif %}
+                  {% endfor %}
+
+                  {% if not found %}
+                    <tr>
+                      <td colspan="6" class="text-center text-muted">
+                        Nenhum prazo {{ pane_id }}.
                       </td>
                     </tr>
-      
-                    {# — Modal de Adicionar Horas para este prazo — #}
-                    <div class="modal fade" id="modalHoras{{ p.id }}" tabindex="-1">
-                      <div class="modal-dialog modal-sm">
-                        <form method="post"
-                              action="{{ url_for('processos.detail_process', processo_id=processo.id) }}">
-                          {{ add_hours_form.hidden_tag() }}
-                          <input type="hidden" name="prazo_id" value="{{ p.id }}">
-                          <div class="modal-content">
-                            <div class="modal-header">
-                              <h5 class="modal-title">Adicionar Horas – Prazo #{{ p.id }}</h5>
-                              <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                              {{ add_hours_form.hours(class_='form-control', id='hours'~p.id) }}
-                            </div>
-                            <div class="modal-footer">
-                              {{ add_hours_form.submit(class_='btn btn-primary') }}
-                            </div>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
                   {% endif %}
-                {% endfor %}
-                {% if not found %}
-                  <tr>
-                    <td colspan="6" class="text-center text-muted">
-                      Nenhum prazo {{ pane_id }}.
-                    </td>
-                  </tr>
-                {% endif %}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
         {% endfor %}
       </div>
+
       
 
       {# Histórico de Horas dos Prazos – Card colapsável estilizado #}

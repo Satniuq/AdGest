@@ -402,88 +402,137 @@ def share_client(
 
 
 def get_client_history(client_id: int, user_id: int) -> Dict[str, Any]:
-    # 1. Carrega o cliente, garantindo permissão
-    client = get_client_or_404(client_id, user_id)
+    # 1. Carrega o cliente, garantindo permissão de visualização
+    client = get_client_or_404(client_id, user_id)  # (verifica client.is_public ou owner/share) :contentReference[oaicite:0]{index=0}
 
-    # 2. Busca Assuntos (concluídos e pendentes) pelo mesmo number_interno
-    assuntos_concluidos = (
-        Assunto.query
-        .join(Assunto.client)
-        .filter(
-            Assunto.client_id == client.id,
-            Assunto.status == 'closed',
-            or_(
-                Assunto.owner_id == user_id,
-                Assunto.shared_with.any(User.id == user_id)
+    # Se o cliente for público, retorna todos os registros sem filtrar por owner/share
+    if client.is_public:  # Client.is_public vem de models.py :contentReference[oaicite:1]{index=1}
+        assuntos_concluidos = (
+            Assunto.query
+            .filter(
+                Assunto.client_id == client.id,
+                Assunto.status == 'closed'
             )
+            .all()
         )
-        .all()
-    )
-    assuntos_pendentes = (
-        Assunto.query
-        .join(Assunto.client)
-        .filter(
-            Assunto.client_id == client.id,
-            Assunto.status == 'open',
-            or_(
-                Assunto.owner_id == user_id,
-                Assunto.shared_with.any(User.id == user_id)
+        assuntos_pendentes = (
+            Assunto.query
+            .filter(
+                Assunto.client_id == client.id,
+                Assunto.status == 'open'
             )
+            .all()
         )
-        .all()
-    )
 
-    # 3. Busca Prazos (concluídos e pendentes) pelo mesmo number_interno
-    prazos_concluidos = (
-        PrazoJudicial.query
-        .filter(
-            PrazoJudicial.client_id == client.id,
-            PrazoJudicial.status == 'closed',
-            or_(
-                PrazoJudicial.owner_id == user_id,
-                PrazoJudicial.shared_with.any(User.id == user_id)
+        prazos_concluidos = (
+            PrazoJudicial.query
+            .filter(
+                PrazoJudicial.client_id == client.id,
+                PrazoJudicial.status == 'closed'
             )
+            .order_by(PrazoJudicial.date)
+            .all()
         )
-        .order_by(PrazoJudicial.date)
-        .all()
-    )
-    prazos_pendentes = (
-        PrazoJudicial.query
-        .filter(
-            PrazoJudicial.client_id == client.id,
-            PrazoJudicial.status == 'open',
-            or_(
-                PrazoJudicial.owner_id == user_id,
-                PrazoJudicial.shared_with.any(User.id == user_id)
+        prazos_pendentes = (
+            PrazoJudicial.query
+            .filter(
+                PrazoJudicial.client_id == client.id,
+                PrazoJudicial.status == 'open'
             )
+            .all()
         )
-        .all()
-    )
 
-    # 4. Busca Processos pelo mesmo cliente
-    processos = (
-        Processo.query
-        .filter(Processo.client_id == client.id,)
-        .order_by(Processo.opened_at.desc())
-        .all()
-    )
-
-    # 5. BUSCA DE TAREFAS RELACIONADAS A ESTE CLIENTE
-    #    via Assunto.client_id == client.id
-    tarefas = (
-        Tarefa.query
-        .join(Tarefa.assunto)
-        .filter(
-            Assunto.client_id == client.id,
-            or_(
-                Tarefa.owner_id == user_id,
-                Tarefa.shared_with.any(User.id == user_id)
-            )
+        processos = (
+            Processo.query
+            .filter(Processo.client_id == client.id)
+            .order_by(Processo.opened_at.desc())
+            .all()
         )
-        .order_by(Tarefa.due_date)
-        .all()
-    )
-    # 6. MONTA HISTÓRICO DE CADA TAREFA
+
+        tarefas = (
+            Tarefa.query
+            .join(Tarefa.assunto)
+            .filter(Assunto.client_id == client.id)
+            .order_by(Tarefa.due_date)
+            .all()
+        )
+    else:
+        # Caso normal: filtra apenas os itens que o user é owner ou foram compartilhados
+        assuntos_concluidos = (
+            Assunto.query
+            .join(Assunto.client)
+            .filter(
+                Assunto.client_id == client.id,
+                Assunto.status == 'closed',
+                or_(
+                    Assunto.owner_id == user_id,
+                    Assunto.shared_with.any(User.id == user_id)
+                )
+            )
+            .all()
+        )
+        assuntos_pendentes = (
+            Assunto.query
+            .join(Assunto.client)
+            .filter(
+                Assunto.client_id == client.id,
+                Assunto.status == 'open',
+                or_(
+                    Assunto.owner_id == user_id,
+                    Assunto.shared_with.any(User.id == user_id)
+                )
+            )
+            .all()
+        )
+
+        prazos_concluidos = (
+            PrazoJudicial.query
+            .filter(
+                PrazoJudicial.client_id == client.id,
+                PrazoJudicial.status == 'closed',
+                or_(
+                    PrazoJudicial.owner_id == user_id,
+                    PrazoJudicial.shared_with.any(User.id == user_id)
+                )
+            )
+            .order_by(PrazoJudicial.date)
+            .all()
+        )
+        prazos_pendentes = (
+            PrazoJudicial.query
+            .filter(
+                PrazoJudicial.client_id == client.id,
+                PrazoJudicial.status == 'open',
+                or_(
+                    PrazoJudicial.owner_id == user_id,
+                    PrazoJudicial.shared_with.any(User.id == user_id)
+                )
+            )
+            .all()
+        )
+
+        processos = (
+            Processo.query
+            .filter(Processo.client_id == client.id)
+            .order_by(Processo.opened_at.desc())
+            .all()
+        )
+
+        tarefas = (
+            Tarefa.query
+            .join(Tarefa.assunto)
+            .filter(
+                Assunto.client_id == client.id,
+                or_(
+                    Tarefa.owner_id == user_id,
+                    Tarefa.shared_with.any(User.id == user_id)
+                )
+            )
+            .order_by(Tarefa.due_date)
+            .all()
+        )
+
+    # 6. Histórico de cada tarefa (permanece igual nos dois casos)
     tarefas_history = {
         t.id: (
             TarefaHistory.query

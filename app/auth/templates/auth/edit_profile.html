@@ -6,19 +6,62 @@
   <h2>Editar Perfil</h2>
   <form method="POST" action="{{ url_for('auth.edit_profile') }}" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
+
     <div class="mb-3">
       {{ form.nickname.label(class="form-label") }}
       {{ form.nickname(class="form-control") }}
+      {% for err in form.nickname.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
     </div>
+
     <div class="mb-3">
       {{ form.email.label(class="form-label") }}
       {{ form.email(class="form-control") }}
+      {% for err in form.email.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
     </div>
+
     <div class="mb-3">
       {{ form.profile_image.label(class="form-label") }}
       {{ form.profile_image(class="form-control") }}
       <small class="form-text text-muted">Selecione uma imagem do seu computador.</small>
+      {% for err in form.profile_image.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
     </div>
+
+    <hr>
+    <h5>Alterar Senha</h5>
+
+    <div class="mb-3">
+      {{ form.current_password.label(class="form-label") }}
+      {{ form.current_password(class="form-control", placeholder="Digite sua senha atual") }}
+      {% for err in form.current_password.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      {{ form.new_password.label(class="form-label") }}
+      {{ form.new_password(class="form-control", placeholder="Deixe em branco para não alterar") }}
+      {% if form.new_password.description %}
+        <small class="form-text text-muted">{{ form.new_password.description }}</small>
+      {% endif %}
+      {% for err in form.new_password.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="mb-3">
+      {{ form.confirm_password.label(class="form-label") }}
+      {{ form.confirm_password(class="form-control", placeholder="Confirme a nova senha") }}
+      {% for err in form.confirm_password.errors %}
+        <div class="text-danger">{{ err }}</div>
+      {% endfor %}
+    </div>
+
     <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
   </form>
 </div>

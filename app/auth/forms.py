@@ -2,7 +2,7 @@
 
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, SubmitField, FileField, SelectField
-from wtforms.validators import DataRequired, Length, Email, EqualTo
+from wtforms.validators import DataRequired, Length, Email, EqualTo, Optional
 
 #BEGIN FORM REGISTAR
 class RegistrationForm(FlaskForm):
@@ -49,8 +49,31 @@ class EditProfileForm(FlaskForm):
             Email(message="Digite um email válido!")
         ]
     )
-    # Campo para upload da imagem de perfil.
     profile_image = FileField('Imagem de Perfil')
+
+    # ===== campos para alterar senha =====
+
+    current_password = PasswordField(
+        'Senha Atual',
+        validators=[ DataRequired(message="Informe sua senha atual para confirmar as alterações.") ]
+    )
+    new_password = PasswordField(
+        'Nova Senha',
+        validators=[
+            Optional(),
+            Length(min=6, message="A nova senha deve ter pelo menos 6 caracteres")
+        ],
+        description="Deixe em branco se não quiser alterar a senha."
+    )
+    confirm_password = PasswordField(
+        'Confirme a Nova Senha',
+        validators=[
+            Optional(),
+            EqualTo('new_password', message='As senhas devem coincidir.')
+        ]
+    )
+    # =======================================
+
     submit = SubmitField('Atualizar')
 #END FORM EDIT PROFILE#
 

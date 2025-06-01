@@ -128,13 +128,25 @@ def toggle(id):
     form = DummyForm()
     if not form.validate_on_submit():
         flash('Erro de validação (CSRF).', 'danger')
-        return redirect(url_for('tarefas.list_for_assunto', assunto_id=TarefaService.get(id).assunto_id))
+        # Se o CSRF falhar, podemos tentar voltar ao list_for_assunto
+        tarefa = TarefaService.get(id)
+        return redirect(url_for('tarefas.list_for_assunto', assunto_id=tarefa.assunto_id))
 
     t = TarefaService.get_or_404(id)
-    if not (current_user.id==t.owner_id or current_user in t.shared_with):
+    if not (current_user.id == t.owner_id or current_user in t.shared_with):
         abort(403)
+
+    # Alterna o status da tarefa
     TarefaService.toggle_status(t, current_user)
     flash('Status da tarefa atualizado!', 'success')
+
+    # Tenta ler o próximo destino enviado pelo formulário
+    next_url = request.form.get('next')
+    if next_url and next_url.startswith('/'):
+        # redireciona de volta para a página de onde veio (history, por ex.)
+        return redirect(next_url)
+
+    # Se não houver 'next', volta para a listagem padrão de tarefas do assunto
     return redirect(url_for('tarefas.list_for_assunto', assunto_id=t.assunto_id))
 
 @tarefas_bp.route('/<int:id>/delete', methods=['POST'])

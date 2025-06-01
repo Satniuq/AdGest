@@ -104,7 +104,7 @@
       <div class="tab-content mb-4">
         {% for status_tab, pane_id in [('open','pendentes'),('done','concluidos')] %}
         <div class="tab-pane fade {% if status_tab=='open' %}show active{% endif %}"
-             id="tab-{{ pane_id }}" role="tabpanel">
+            id="tab-{{ pane_id }}" role="tabpanel">
           <div class="table-responsive">
             <table class="table table-sm align-middle mb-0">
               <thead class="table-light">
@@ -112,8 +112,7 @@
                   <th>Título</th>
                   <th>Vencimento</th>
                   <th class="text-center">Horas</th>
-                  <th class="text-center">Faturado</th>
-                  <th class="text-center">Pendente</th>
+                  <th class="text-center">Status</th>
                   <th class="text-end">Ações</th>
                 </tr>
               </thead>
@@ -122,16 +121,27 @@
                 {% for t in tarefas %}
                   {% if t.status == status_tab %}
                     {% set found = true %}
+                    {# calcula total de horas como era antes #}
                     {% set total = hours_map[t.id]|default(0) %}
-                    {% set additions = t.additions|sort(attribute='timestamp', reverse=true) %}
-                    {% set billed = additions|selectattr('billed')|map(attribute='horas_adicionadas')|sum %}
-                    {% set pendente = ((total - billed) if (total - billed)>0 else 0) %}
                     <tr>
                       <td>{{ t.title }}</td>
                       <td>{{ t.due_date.strftime('%d/%m/%Y') if t.due_date else '—' }}</td>
                       <td class="text-center">{{ '%.1f'|format(total) }}h</td>
-                      <td class="text-center">{{ '%.1f'|format(billed) }}h</td>
-                      <td class="text-center">{{ '%.1f'|format(pendente) }}h</td>
+                      <td class="text-center">
+                        <form method="post"
+                              action="{{ url_for('tarefas.toggle', id=t.id) }}"
+                              class="d-inline">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          {# Campo que indica para onde retornar após o toggle #}
+                          <input type="hidden" name="next" value="{{ request.full_path }}">
+                          <button type="submit"
+                                  class="btn btn-sm
+                                    {% if t.status=='open' %}btn-warning text-dark
+                                    {% else %}btn-success{% endif %}">
+                            {{ t.status|capitalize }}
+                          </button>
+                        </form>
+                      </td>
                       <td class="text-end">
                         <button class="btn btn-sm btn-outline-secondary me-1"
                                 data-bs-toggle="modal"
@@ -142,7 +152,7 @@
                         {{ m.shared_dropdown(t) }}
                         {{ m.history_dropdown(t) }}
                         <a href="{{ url_for('tarefas.edit', id=t.id) }}"
-                           class="btn btn-sm btn-outline-primary me-1" title="Editar">
+                          class="btn btn-sm btn-outline-primary me-1" title="Editar">
                           <i class="fa-solid fa-pen-to-square"></i>
                         </a>
                         <form method="post"
@@ -159,10 +169,10 @@
 
                     {# Modal Inline para Adicionar Horas #}
                     <div class="modal fade"
-                         id="modalHorasTarefa{{ t.id }}"
-                         tabindex="-1"
-                         aria-labelledby="modalHorasTarefaLabel{{ t.id }}"
-                         aria-hidden="true">
+                        id="modalHorasTarefa{{ t.id }}"
+                        tabindex="-1"
+                        aria-labelledby="modalHorasTarefaLabel{{ t.id }}"
+                        aria-hidden="true">
                       <div class="modal-dialog modal-sm">
                         <form method="post" action="{{ url_for('tarefas.add_hours', id=t.id) }}">
                           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -176,12 +186,12 @@
                             <div class="modal-body p-3">
                               <label for="horas{{ t.id }}" class="form-label">Horas</label>
                               <input type="number"
-                                     name="horas"
-                                     id="horas{{ t.id }}"
-                                     step="0.25"
-                                     class="form-control"
-                                     placeholder="0.0"
-                                     required>
+                                    name="horas"
+                                    id="horas{{ t.id }}"
+                                    step="0.25"
+                                    class="form-control"
+                                    placeholder="0.0"
+                                    required>
                             </div>
                             <div class="modal-footer">
                               <button type="button"
@@ -202,7 +212,7 @@
                 {% endfor %}
                 {% if not found %}
                 <tr>
-                  <td colspan="6" class="text-center text-muted">
+                  <td colspan="5" class="text-center text-muted">
                     Nenhuma tarefa {{ 'pendentes' if status_tab=='open' else 'concluídas' }}.
                   </td>
                 </tr>
@@ -213,6 +223,7 @@
         </div>
         {% endfor %}
       </div>
+
 
       {# Histórico de Horas das Tarefas – Card colapsável estilizado #}
       <div class="card mb-4">

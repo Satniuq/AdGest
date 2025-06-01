@@ -2,6 +2,8 @@
 <html lang="pt">
   <head>
     <meta charset="utf-8">
+    <!-- 1) Meta viewport obrigatório para mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <!-- CSRF token para chamadas AJAX -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -11,13 +13,15 @@
     <link rel="icon" type="image/png" sizes="32x32"
           href="{{ url_for('static', filename='icons/logo_pag.png') }}">
 
-    <!-- Bootstrap CSS -->
+    <!-- 2) Bootstrap CSS -->
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
       rel="stylesheet"
+      integrity="sha384-…"
+      crossorigin="anonymous"
     />
 
-    <!-- FontAwesome -->
+    <!-- 3) FontAwesome -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"
@@ -25,22 +29,22 @@
       referrerpolicy="no-referrer"
     />
 
-    
     {% block extra_css %}{% endblock %}
 
-    <!-- CSS geral da aplicação -->
+    <!-- 4) CSS geral da aplicação -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/prazos.css') }}">
   </head>
 
+  {# Se você quiser aplicar alguma classe custom ao body, deixa como está. #}
   <body class="{% block body_class %}{% endblock %}">
-    <!-- Navbar -->
+    <!-- Navbar (colapsa em <lg; para colapsar antes, troque por navbar-expand-md) -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light sticky-top shadow-sm">
       <div class="container-fluid">
         <a href="{{ url_for('index.index') }}" class="navbar-brand d-flex align-items-center">
           <img src="{{ url_for('static', filename='icons/logo_pag.png') }}"
                alt="Logo"
-               class="rounded-circle me-2"
+               class="rounded-circle me-2 img-fluid"
                style="width: 48px; height: 48px; object-fit: cover;">
           <span class="fs-5">AdGest</span>
         </a>
@@ -68,7 +72,7 @@
               <ul class="dropdown-menu dropdown-menu-end shadow-sm" aria-labelledby="navbarNotifications">
                 {% if notifications %}
                   {% for notif in notifications %}
-                    <li class="d-flex justify-content-between align-items-start px-2 py-1">
+                    <li class="d-flex justify-content-between align-items-start px-2 py-1 notification-item">
                       <div class="me-2">
                         {{ notif.message }}
                         <br>
@@ -120,7 +124,7 @@
                   <a class="nav-link p-0" href="{{ url_for('auth.profile') }}">
                     <img src="{{ current_user.profile_image }}"
                          alt="Avatar"
-                         class="rounded-circle border border-light"
+                         class="rounded-circle border border-light img-fluid"
                          style="width:32px; height:32px; object-fit:cover;">
                   </a>
                 </li>
@@ -156,14 +160,16 @@
       {% block content %}{% endblock %}
     </main>
 
+    <!-- Scripts (em ordem) -->
     <!-- 1) jQuery (precisa vir antes do Select2) -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 
-    <!-- 2) Select2 JS (agrega o plugin ao jQuery) -->
+    <!-- 2) Select2 JS (se estiver usando) -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0/dist/js/select2.min.js"></script>
 
     <!-- 3) Bootstrap JS + Popper -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-…" crossorigin="anonymous"></script>
 
     <!-- 4) JS geral da aplicação (custom.js) -->
     <script src="{{ url_for('static', filename='js/custom.js') }}"></script>
@@ -213,7 +219,7 @@
     {% include 'dashboard/sortable_script.html' %}
 
     <!-- Rodapé -->
-    <footer class="bg-light text-center py-3 mt-4 shadow-sm">
+    <footer class="bg-light text-center py-3 mt-auto shadow-sm">
       <div class="container">
         <small class="text-muted">© 2025 AdGest. Todos os direitos reservados.</small>
       </div>
