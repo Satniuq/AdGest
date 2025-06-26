@@ -7,10 +7,8 @@ Flask-Mail
 email_validator
 WTForms
 WTForms-SQLAlchemy
-gunicorn
-pymysql
-google-cloud-storage
 python-dotenv
 Flask-Session>=0.4.0
+pywebview
 
 

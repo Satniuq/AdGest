@@ -1,5 +1,6 @@
 # app/auth/routes.py
 
+import os
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -14,7 +15,6 @@ from app.auth.forms import (
 )
 from app.auth.models import User, AuditLog
 from app.decorators import admin_required
-from app.gcs_helpers import upload_to_gcs
 
 from app.auth import auth_bp
 
@@ -43,20 +43,20 @@ def edit_profile():
         current_user.nickname = form.nickname.data
         current_user.email = form.email.data
 
-        # 3) Se veio imagem nova, faz upload para o GCS
+        # 3) Se veio imagem nova, faz upload LOCAL
         if form.profile_image.data:
             file_data = form.profile_image.data
             if hasattr(file_data, 'filename') and file_data.filename:
                 filename = secure_filename(file_data.filename)
+                upload_folder = current_app.config['UPLOAD_FOLDER']
+                os.makedirs(upload_folder, exist_ok=True)
+                file_path = os.path.join(upload_folder, filename)
                 try:
-                    public_url = upload_to_gcs(
-                        file_obj=file_data,
-                        filename=filename,
-                        content_type=file_data.content_type
-                    )
-                    current_user.profile_image = public_url
+                    file_data.save(file_path)
+                    # Guarda o caminho relativo ou absoluto no perfil, conforme pretendes
+                    current_user.profile_image = os.path.relpath(file_path, start=os.path.join(current_app.root_path, 'static'))
                 except Exception as e:
-                    current_app.logger.error(f"Erro ao fazer upload para o GCS: {e}")
+                    current_app.logger.error(f"Erro ao fazer upload da imagem: {e}")
                     flash("Erro ao fazer upload da imagem. Tente novamente.", "danger")
                     return redirect(url_for("auth.edit_profile"))
 
@@ -72,7 +72,6 @@ def edit_profile():
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Erro ao atualizar perfil: {e}")
-            # Verifica se é violação de unicidade de email
             if 'uq_users_email' in str(e):
                 flash('Este e-mail já está em uso por outro usuário.', 'danger')
             else:
@@ -80,7 +79,6 @@ def edit_profile():
         return redirect(url_for('auth.profile'))
 
     return render_template('auth/edit_profile.html', form=form)
-
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 @login_required
