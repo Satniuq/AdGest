@@ -11,7 +11,7 @@
       <p><strong>Email:</strong> {{ user.email }}</p>
       <p><strong>Papel:</strong> {{ user.role }}</p>
       {% if user.profile_image %}
-        <img src="{{ url_for('static', filename='icons/' ~ user.profile_image) }}" alt="Imagem de perfil" class="img-thumbnail" style="max-width: 200px;">
+        <img src="{{ url_for('static', filename=user.profile_image) }}" alt="Imagem de perfil" class="img-thumbnail" style="max-width: 200px;">
       {% endif %}
     </div>
   </div>

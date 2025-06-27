@@ -1,7 +1,5 @@
-# app/auth/forms.py
-
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, FileField, SelectField
+from wtforms import StringField, PasswordField, SubmitField, FileField, SelectField, BooleanField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, Optional
 
 #BEGIN FORM REGISTAR
@@ -81,5 +79,6 @@ class EditProfileForm(FlaskForm):
 class LoginForm(FlaskForm):
     username = StringField('Usuário', validators=[DataRequired()])
     password = PasswordField('Senha', validators=[DataRequired()])
+    remember = BooleanField('Lembrar-me neste computador')
     submit = SubmitField('Entrar')
 #END FORM LOGIN

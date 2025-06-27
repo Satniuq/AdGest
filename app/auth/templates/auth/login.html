@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
     <style>
-      /* CSS inline para o layout de login (ou adicione no style.css) */
       body {
         margin: 0;
         padding: 0;
@@ -19,33 +18,33 @@
       .login-container {
         display: flex;
         width: 100%;
-        height: 100vh; /* Ocupa toda a altura da viewport */
+        height: 100vh;
         overflow: hidden;
         transition: all 0.5s ease;
       }
       .left-panel {
-        flex: 0 0 100%; /* Inicialmente 100% (ocupa toda a tela) */
+        flex: 0 0 100%;
         transition: flex-basis 0.5s ease;
         display: flex;
         justify-content: center;
         align-items: center;
-        background-color: #557500; /* Ajuste da cor ou use outra se preferir */
+        background-color: #557500;
       }
       .right-panel {
-        flex: 0 0 0; /* Inicialmente oculto */
+        flex: 0 0 0;
         transition: flex-basis 0.5s ease;
         overflow: hidden;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        background-color: #ffffff; /* Fundo da área de login */
+        background-color: #ffffff;
       }
       .login-container:hover .left-panel {
-        flex: 0 0 66.67%; /* 2/3 da tela */
+        flex: 0 0 66.67%;
       }
       .login-container:hover .right-panel {
-        flex: 0 0 33.33%; /* 1/3 da tela */
+        flex: 0 0 33.33%;
       }
       .left-panel .logo {
         max-width: 80%;
@@ -69,10 +68,38 @@
           <h2 class="mb-3 text-center">Login</h2>
           <form method="POST" class="needs-validation" novalidate>
             {{ form.hidden_tag() }}
-            <!-- Supondo que macros.render_field() já formate os campos -->
-            {% import "macros.html" as macros %}
-            {{ macros.render_field(form.username) }}
-            {{ macros.render_field(form.password) }}
+
+            <div class="mb-3">
+              {{ form.username.label(class="form-label") }}
+              {{ form.username(class="form-control") }}
+              {% if form.username.errors %}
+                <div class="text-danger small">
+                  {% for error in form.username.errors %}
+                    {{ error }}<br>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              {{ form.password.label(class="form-label") }}
+              {{ form.password(class="form-control") }}
+              {% if form.password.errors %}
+                <div class="text-danger small">
+                  {% for error in form.password.errors %}
+                    {{ error }}<br>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3 form-check text-start">
+              {{ form.remember(class="form-check-input") }}
+              <label class="form-check-label" for="remember">
+                {{ form.remember.label.text }}
+              </label>
+            </div>
+
             <div class="mb-3 text-center">
               {{ form.submit(class="btn btn-primary") }}
             </div>
@@ -83,7 +110,6 @@
         </div>
       </div>
     </div>
-
     <!-- Bootstrap JS (inclui Popper.js) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Seu JS customizado (opcional) -->

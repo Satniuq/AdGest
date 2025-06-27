@@ -1,6 +1,5 @@
-# app/auth/routes.py
-
 import os
+import json
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -18,11 +17,44 @@ from app.decorators import admin_required
 
 from app.auth import auth_bp
 
+# ------------------------
+# UTILS - lembrar user localmente
+# ------------------------
+
+def get_auth_file():
+    """Caminho do ficheiro local para lembrar user"""
+    return os.path.join(os.path.expanduser("~"), '.adgest_auth.json')
+
+def save_user_session(user_id):
+    """Guarda o user_id autenticado no ficheiro local"""
+    try:
+        with open(get_auth_file(), 'w') as f:
+            json.dump({'user_id': user_id}, f)
+    except Exception as e:
+        current_app.logger.error(f'Erro ao guardar user local: {e}')
+
+def get_saved_user():
+    """Lê o user_id autenticado do ficheiro local (se existir)"""
+    try:
+        with open(get_auth_file(), 'r') as f:
+            data = json.load(f)
+            return data.get('user_id')
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+def clear_saved_user():
+    """Remove o ficheiro local de autenticação"""
+    try:
+        os.remove(get_auth_file())
+    except FileNotFoundError:
+        pass
+
+# ------------------------
+
 @auth_bp.route('/profile')
 @login_required
 def profile():
     return render_template('auth/profile.html', user=current_user)
-
 
 @auth_bp.route('/edit_profile', methods=['GET', 'POST'])
 @login_required
@@ -53,8 +85,9 @@ def edit_profile():
                 file_path = os.path.join(upload_folder, filename)
                 try:
                     file_data.save(file_path)
-                    # Guarda o caminho relativo ou absoluto no perfil, conforme pretendes
-                    current_user.profile_image = os.path.relpath(file_path, start=os.path.join(current_app.root_path, 'static'))
+                    rel_path = os.path.relpath(file_path, start=os.path.join(current_app.root_path, 'static'))
+                    current_user.profile_image = rel_path.replace('\\', '/')
+
                 except Exception as e:
                     current_app.logger.error(f"Erro ao fazer upload da imagem: {e}")
                     flash("Erro ao fazer upload da imagem. Tente novamente.", "danger")
@@ -65,7 +98,7 @@ def edit_profile():
             hashed_pw = generate_password_hash(form.new_password.data)
             current_user.password = hashed_pw
 
-        # 5) Commit das alterações (nickname, email, imagem e senha, se houver)
+        # 5) Commit das alterações
         try:
             db.session.commit()
             flash('Perfil atualizado com sucesso!', 'success')
@@ -108,6 +141,24 @@ def register():
                 flash(f"Erro no campo {field}: {error}", 'danger')
     return render_template('auth/register.html', form=form)
 
+# ---------------
+# LOGIN AUTOMÁTICO SE "LEMBRADO"
+# ---------------
+
+@auth_bp.route('/')
+def landing():
+    if current_user.is_authenticated:
+        return redirect(url_for('index.index'))
+    saved_user_id = get_saved_user()
+    if saved_user_id:
+        user = User.query.get(saved_user_id)
+        if user:
+            login_user(user, remember=False)
+            flash(f"Bem-vindo de volta, {user.nickname}!", "success")
+            return redirect(url_for('index.index'))
+        else:
+            clear_saved_user()
+    return redirect(url_for('auth.login'))
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -116,11 +167,15 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
         if user and check_password_hash(user.password, form.password.data):
             login_user(user, remember=False)
+            # Lembrar-me neste computador
+            if (hasattr(form, 'remember') and form.remember.data) or request.form.get('remember'):
+                save_user_session(user.id)
+            else:
+                clear_saved_user()
             return redirect(url_for('index.index'))
         else:
             flash('Usuário ou senha incorretos.', 'danger')
     return render_template('auth/login.html', form=form)
-
 
 @auth_bp.route('/reset_password', methods=['GET', 'POST'])
 def reset_request():
@@ -134,7 +189,6 @@ def reset_request():
         flash('Se um usuário com esse e-mail existir, as instruções foram enviadas.', 'info')
         return redirect(url_for('auth.login'))
     return render_template('auth/reset_request.html', form=form)
-
 
 @auth_bp.route('/reset_password/<token>', methods=['GET', 'POST'])
 def reset_token(token):
@@ -152,7 +206,6 @@ def reset_token(token):
         return redirect(url_for('auth.login'))
     return render_template('auth/reset_token.html', form=form)
 
-
 def send_reset_email(user):
     token = user.get_reset_token()
     reset_url = url_for('auth.reset_token', token=token, _external=True)
@@ -169,9 +222,9 @@ def send_reset_email(user):
     )
     mail.send(msg)
 
-
 @auth_bp.route('/logout')
 @login_required
 def logout():
     logout_user()
+    clear_saved_user()
     return redirect(url_for('auth.login'))
